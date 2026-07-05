@@ -256,7 +256,45 @@ menu_ssh_vip() {
         sub_footer
         prompt_sub "SSH VIP"
         case $SUB in
-            1) clear; echo -e "${CYAN}━━ Création compte SSH ━━${RESET}"; read -rp "  Username: " u; read -rp "  Password: " p; read -rp "  Expire (jours): " e; useradd -e "$(date -d "+${e}days" +%Y-%m-%d)" -s /bin/bash "$u" 2>/dev/null && echo "$u:$p" | chpasswd && echo -e "${GREEN}  ✓ Compte $u créé (${e} jours)${RESET}" || echo -e "${RED}  ✗ Échec${RESET}"; pause;;
+            1) clear; echo -e "${CYAN}━━ Création compte SSH ━━${RESET}"; read -rp "  Username: " u; read -rp "  Password: " p; read -rp "  Expire (jours): " e; if useradd -e "$(date -d "+${e}days" +%Y-%m-%d)" -s /bin/bash "$u" 2>/dev/null && echo "$u:$p" | chpasswd; then
+                local D="${DOMAIN:-$IP}" E="$(date -d "+${e}days" +%Y-%m-%d)"
+                local KEY=$(cat /etc/slowdns/server.pub 2>/dev/null || echo "non-dispo")
+                local NS=$(grep NS4 /etc/slowdns/ns.conf 2>/dev/null | cut -d= -f2 || echo "ns4.kingom.ggff.net")
+                clear
+                echo "╔═══════════════════════════════════════════════════════════════════════╗"
+                echo "║  ${ORANGE}✨  NOUVEAU UTILISATEUR CRE  ✨${RESET}                             ║"
+                echo "╠═══════════════════════════════════════════════════════════════════════╣"
+                echo "║  ${LAV}🔐 PORTS DISPONIBLES :${RESET}                                       ║"
+                echo "║  ${WHITE}∘ SSH: 22          ∘ System-DNS: 53${RESET}                         ║"
+                echo "║  ${WHITE}∘ SSH WS: 80${RESET}                                                ║"
+                echo "║  ${WHITE}∘ DROPBEAR: 109   ∘ SSL: 444${RESET}                                ║"
+                echo "║  ${WHITE}∘ BadVPN: 7100, 7200, 7300${RESET}                                  ║"
+                echo "║  ${WHITE}∘ SLOWDNS: 5300    ∘ UDP-Custom: 1-65535${RESET}                    ║"
+                echo "║  ${WHITE}∘ WS-epro: 80  ∘ Proxy WS: 9090${RESET}                             ║"
+                echo "╠═══════════════════════════════════════════════════════════════════════╣"
+                echo "║  ${ORANGE}🌍 DOMAINE :${RESET} ${CYAN}${D}${RESET}                                            ║"
+                echo "║  ${ORANGE}📌 IP HOST :${RESET} ${CYAN}${IP}${RESET}                                             ║"
+                echo "║  ${ORANGE}👤 UTILISATEUR :${RESET} ${MAG}${u}${RESET}                                            ║"
+                echo "║  ${ORANGE}🔑 MOT DE PASSE :${RESET} ${MAG}${p}${RESET}                                            ║"
+                echo "║  ${ORANGE}📦 LIMITE :${RESET} ${YELLOW}${e} jours${RESET}                                            ║"
+                echo "║  ${ORANGE}📅 DATE D'EXPIRATION :${RESET} ${YELLOW}${E}${RESET}                                      ║"
+                echo "╠═══════════════════════════════════════════════════════════════════════╣"
+                echo "║  ${LAV}📲 APPS : HTTP Injector, CUSTOM, SOCKSIP TUNNEL, SSC ZIVPN, etc.${RESET}  ║"
+                echo "║  ${WHITE}➡️ SSH WS :${RESET} ${CYAN}${D}:80@${u}:${p}${RESET}                             ║"
+                echo "║  ${WHITE}➡️ SSL/TLS :${RESET} ${CYAN}${D}:444@${u}:${p}${RESET}                             ║"
+                echo "║  ${WHITE}➡️ PROXY WS :${RESET} ${CYAN}${D}:9090@${u}:${p}${RESET}                             ║"
+                echo "║  ${WHITE}➡️ SSH UDP :${RESET} ${CYAN}${D}:1-65535@${u}:${p}${RESET}                              ║"
+                echo "║  ${LAV}📜 PAYLOAD WS:${RESET}                                              ║"
+                echo "║  ${DIM}GET / HTTP/1.1[crlf]Host: [host][crlf]Connection: Upgrade${RESET}     ║"
+                echo "║  ${DIM}[crlf]User-Agent: [ua][crlf]Upgrade: websocket[crlf][crlf]${RESET}    ║"
+                echo "╠═══════════════════════════════════════════════════════════════════════╣"
+                echo "║  ${LAV}🚀 CONFIG FASTDNS (5300)${RESET}                                    ║"
+                echo "║  ${LAV}🔐 Pub KEY:${RESET} ${YELLOW}${KEY}${RESET}          ║"
+                echo "║  ${LAV}NameServer:${RESET} ${CYAN}${NS}${RESET}                                         ║"
+                echo "║  ${GREEN}✅  COMPTE CREE AVEC SUCCES${RESET}                                   ║"
+                echo "╚═══════════════════════════════════════════════════════════════════════╝"
+                echo "$(date '+%Y-%m-%d %H:%M:%S') | CREATION | $u | Exp: $E" >> /var/log/kighmu-user.log 2>/dev/null || true
+            else echo -e "${RED}  ✗ Échec création (user existe déjà ?)${RESET}"; fi; pause;;
             2) clear; echo -e "${CYAN}━━ Suppression ━━${RESET}"; read -rp "  Username: " u; userdel -r "$u" 2>/dev/null && echo -e "${GREEN}  ✓ Supprimé${RESET}" || echo -e "${RED}  ✗ Introuvable${RESET}"; pause;;
             3) clear; echo -e "${CYAN}━━ Liste comptes SSH ━━${RESET}"; awk -F: '$7~/bash|sh/ && $3>=1000 {printf "  %-15s exp: ", $1; system("chage -l "$1" 2>/dev/null | grep \"Account expires\" | cut -d: -f2")}' /etc/passwd; pause;;
             4) clear; echo -e "${CYAN}━━ Renew compte ━━${RESET}"; read -rp "  Username: " u; read -rp "  Jours suppl.: " e; chage -E "$(date -d "+${e}days" +%Y-%m-%d)" "$u" 2>/dev/null && echo -e "${GREEN}  ✓ Prolongé${RESET}" || echo -e "${RED}  ✗ Échec${RESET}"; pause;;
