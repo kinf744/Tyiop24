@@ -575,6 +575,49 @@ BWSVC
 }
 
 # ================================================
+# NETTOYAGE POST-INSTALLATION
+# ================================================
+cleanup_scripts() {
+    echo "${YELLOW}━━━ Nettoyage des fichiers d'installation ━━━${RESET}"
+    echo "${YELLOW}Ceci supprime les scripts d'installation du VPS client.${RESET}"
+    echo "${YELLOW}Seuls les fichiers nécessaires au fonctionnement restent.${RESET}"
+    echo
+    read -rp "Confirmer le nettoyage ? (o/N): " C
+    [[ "$C" =~ ^[oO]$ ]] || { echo "Annulé"; return; }
+
+    # Supprimer le dépôt cloné (répertoire contenant ce script)
+    if [[ -d "$SCRIPT_DIR" && "$SCRIPT_DIR" =~ Tyiop24 ]]; then
+        echo "  Suppression de $SCRIPT_DIR ..."
+        rm -rf "$SCRIPT_DIR"
+    fi
+
+    # Supprimer /root/Kighmu legacy
+    if [[ -d /root/Kighmu ]]; then
+        echo "  Suppression de /root/Kighmu/ ..."
+        rm -rf /root/Kighmu
+    fi
+
+    # Supprimer le fichier d'info utilisateur
+    rm -f /root/.kighmu_info 2>/dev/null || true
+
+    # Sécuriser les fichiers .env
+    chmod 600 /opt/kighmu-panel/.env 2>/dev/null || true
+    find /opt/kighmu-panel -name "*.env" -exec chmod 600 {} \; 2>/dev/null || true
+
+    # Sécuriser les clés privées
+    find /etc -name "*.key" -exec chmod 600 {} \; 2>/dev/null || true
+    find /etc -name "*.pem" -exec chmod 600 {} \; 2>/dev/null || true
+
+    echo
+    log "Nettoyage terminé. Scripts d'installation supprimés."
+    echo "   Panel: http://$(hostname -I | awk '{print $1}'):8585/admin/"
+    echo "   Tunnels: udp.sh, xray-v2ray.sh, ssh.sh (ne sont plus disponibles)"
+    echo
+    read -rp "Appuyez sur Entrée pour quitter..."
+    exit 0
+}
+
+# ================================================
 # INSTALLATION COMPLÈTE
 # ================================================
 full_install() {
@@ -599,7 +642,13 @@ full_install() {
     echo
     echo "${GREEN}${BOLD}✅ Installation terminée !${RESET}"
     echo "   Panel: http://$(hostname -I | awk '{print $1}'):8585/admin/"
-    echo "   Fichiers: install.sh, ssh.sh, udp.sh, xray-v2ray.sh"
+    echo
+    read -rp "Souhaitez-vous nettoyer les fichiers d'installation du VPS ? (o/N): " C
+    if [[ "$C" =~ ^[oO]$ ]]; then
+        cleanup_scripts
+    else
+        echo "   Les scripts d'installation sont toujours présents : $SCRIPT_DIR"
+    fi
     pause
 }
 
@@ -623,6 +672,9 @@ main_menu() {
         echo "  ${GREEN}[5]${RESET} Xray & V2Ray (VMess, VLESS, Trojan, Shadowsocks)"
         echo "  ${GREEN}[6]${RESET} Tunnels SSH (Dropbear, SlowDNS, SSL, WS, SOCKS)"
         echo
+        echo "${WHITE}Sécurité:${RESET}"
+        echo "  ${GREEN}[7]${RESET} 🔒 Nettoyer les scripts d'installation du VPS"
+        echo
         echo "  ${RED}[0]${RESET} Quitter"
         echo
         echo -n "Choix: "
@@ -634,6 +686,7 @@ main_menu() {
             4) bash "$SCRIPT_DIR/udp.sh" ;;
             5) bash "$SCRIPT_DIR/xray-v2ray.sh" ;;
             6) bash "$SCRIPT_DIR/ssh.sh" ;;
+            7) cleanup_scripts ;;
             0) exit 0 ;;
             *) ;;
         esac
