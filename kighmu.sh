@@ -111,8 +111,8 @@ draw_panel() {
     printf "${BG}╠══════════════════════════════════════════════════════════════════════╣${RESET}\n"
 
     # ── Statuts services ──
-    printf "${BG}║${RESET}  ${LAV}SSH${RESET}     %s  ${LAV}NGINX${RESET}   %s  ${LAV}HAPROXY${RESET}  %s  ${LAV}WS-epro${RESET} OFF   ${LAV}XRAY${RESET}    %s  ${LAV}DROPBEAR${RESET}  %s ${BG}║${RESET}\n" "$S_SSH" "$S_NGINX" "$S_HAPROXY" "$S_XRAY" "$S_DROP"
-    printf "${BG}║${RESET}  ${LAV}HYSTERIA${RESET} %s  ${LAV}ZIVPN${RESET}    %s  ${LAV}V2RAY${RESET}    %s                                                 ${BG}║${RESET}\n" "$S_HY" "$S_ZIVPN" "$S_V2RAY"
+    printf "${BG}║${RESET}  ${LAV}SSH${RESET} %s  ${LAV}NGINX${RESET} %s  ${LAV}HAPROXY${RESET} %s  ${LAV}XRAY${RESET} %s  ${LAV}V2RAY${RESET} %s  ${LAV}DROPBEAR${RESET} %s ${BG}║${RESET}\n" "$S_SSH" "$S_NGINX" "$S_HAPROXY" "$S_XRAY" "$S_V2RAY" "$S_DROP"
+    printf "${BG}║${RESET}  ${LAV}HYSTERIA${RESET} %s  ${LAV}ZIVPN${RESET} %s  ${LAV}WS-epro${RESET} OFF  ${LAV}SLOWDNS${RESET} OFF  ${LAV}SSL/TLS${RESET} OFF  ${LAV}SOCKS${RESET} OFF ${BG}║${RESET}\n" "$S_HY" "$S_ZIVPN"
     printf "${BG}╠══════════════════════════════════════════════════════════════════════╣${RESET}\n"
 
     # ── Menu numéroté (3 colonnes) ──
