@@ -44,12 +44,9 @@ center() {
 # ── Couvre chaque ligne du fond violet ──
 with_bg() { echo -ne "${BG}$1${RESET}"; }
 
-# ── Convertisseur d'octets en format lisible ──
+# ── Convertisseur en GB/TB avec 1 décimale ──
 fmt_bytes() {
     local b=$1
-    if ((b < 1024)); then echo "${b}B"; return; fi
-    if ((b < 1048576)); then awk "BEGIN{printf \"%.1f KB\", $b/1024}"; return; fi
-    if ((b < 1073741824)); then awk "BEGIN{printf \"%.1f MB\", $b/1048576}"; return; fi
     if ((b < 1099511627776)); then awk "BEGIN{printf \"%.1f GB\", $b/1073741824}"; return; fi
     awk "BEGIN{printf \"%.1f TB\", $b/1099511627776}"
 }
