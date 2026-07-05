@@ -311,16 +311,8 @@ menu_ssh_vip() {
                 local total=0
                 while IFS= read -r u; do
                     local count=$(who | awk -v u="$u" '$1==u' | wc -l)
-                    local exp=$(chage -l "$u" 2>/dev/null | grep "Account expires" | cut -d: -f2)
-                    local status="${GREEN}Actif${RESET}"
-                    if echo "$exp" | grep -qi "never"; then
-                        status="${GREEN}Actif${RESET}"
-                    elif [[ -n "$exp" ]]; then
-                        local exp_s=$(date -d "$exp" +%s 2>/dev/null || echo 0)
-                        local now_s=$(date +%s)
-                        (( exp_s < now_s )) && status="${RED}Expiré${RESET}"
-                    fi
-                    (( count == 0 )) && status="${RED}Inactif${RESET}"
+                    local status="${RED}Inactif${RESET}"
+                    (( count > 0 )) && status="${GREEN}Actif${RESET}"
                     total=$((total + count))
                     printf "${BG}  ${WHITE}%-16s${RESET} ${MAG}%-3s${RESET}        %b${RESET}\n" "$u" "$count" "$status"
                 done < <(awk -F: '$7~/bash|sh/ && $3>=1000{print $1}' /etc/passwd 2>/dev/null | sort -u)
