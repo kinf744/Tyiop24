@@ -365,7 +365,6 @@ menu_vmess() {
         sub_row 3 "LISTE COMPTES"           4 "RENEW COMPTE"
         sub_row 5 "TRIAL ACCOUNT"           6 "CHECK EXPIRY"
         sub_row 7 "SHOW CONFIG"             8 "DELETE EXPIRED"
-        sub_row 9 "TRAFFIC USAGE"           0 "RETOUR"
         sub_footer
         prompt_sub "VMESS"
         case $SUB in
@@ -391,7 +390,6 @@ menu_vless() {
         sub_row 3 "LISTE COMPTES"           4 "RENEW COMPTE"
         sub_row 5 "TRIAL ACCOUNT"           6 "CHECK EXPIRY"
         sub_row 7 "SHOW CONFIG"             8 "DELETE EXPIRED"
-        sub_row 9 "TRAFFIC USAGE"           0 "RETOUR"
         sub_footer
         prompt_sub "VLESS"
         case $SUB in
@@ -417,7 +415,6 @@ menu_trojan() {
         sub_row 3 "LISTE COMPTES"           4 "RENEW COMPTE"
         sub_row 5 "TRIAL ACCOUNT"           6 "CHECK EXPIRY"
         sub_row 7 "SHOW CONFIG"             8 "DELETE EXPIRED"
-        sub_row 9 "TRAFFIC USAGE"           0 "RETOUR"
         sub_footer
         prompt_sub "TROJAN"
         case $SUB in
@@ -443,7 +440,6 @@ menu_shadow() {
         sub_row 3 "LISTE COMPTES"           4 "RENEW COMPTE"
         sub_row 5 "TRIAL ACCOUNT"           6 "CHECK EXPIRY"
         sub_row 7 "SHOW CONFIG"             8 "DELETE EXPIRED"
-        sub_row 9 "TRAFFIC USAGE"           0 "RETOUR"
         sub_footer
         prompt_sub "SHADOWSOCKS"
         case $SUB in
@@ -517,7 +513,6 @@ menu_v2ray_dns() {
         sub_row 3 "LISTE COMPTES"           4 "RENEW COMPTE"
         sub_row 5 "TRIAL ACCOUNT"           6 "CHECK EXPIRY"
         sub_row 7 "SHOW CONFIG"             8 "CHANGE NS"
-        sub_row 9 "TRAFFIC USAGE"           0 "RETOUR"
         sub_footer
         prompt_sub "V2RAY DNS"
         case $SUB in
