@@ -129,6 +129,10 @@ install_mysql() {
 
     if [[ -f "$SCRIPT_DIR/schema.sql" ]]; then
         mysql "${DB_NAME}" < "$SCRIPT_DIR/schema.sql" 2>/dev/null && log "Schema importé" || warn "Schema déjà présent"
+    elif [[ -f "$KIGHMU_DIR/schema.sql" ]]; then
+        mysql "${DB_NAME}" < "$KIGHMU_DIR/schema.sql" 2>/dev/null && log "Schema importé (Kighmu dir)" || warn "Schema déjà présent"
+    else
+        curl -fsSL "https://raw.githubusercontent.com/kinf744/Tyiop24/main/schema.sql" -o /tmp/schema.sql 2>/dev/null && mysql "${DB_NAME}" < /tmp/schema.sql 2>/dev/null && log "Schema importé (GitHub)" && rm -f /tmp/schema.sql || warn "Schema non trouvé, création auto..."
     fi
     log "Base de données prête"
 }
