@@ -1129,7 +1129,6 @@ menu_panel_web() {
         sub_row 9 "CERT SSL PANEL"          10 "BACKUP PANEL"
         sub_row 11 "RESTORE PANEL"          12 "RESET PASSWORD"
         sub_row 13 "STATUT MYSQL"           14 "MAINTENANCE"
-        sub_row 15 "UPDATE PANEL"            0 "RETOUR"
         sub_footer
         prompt_sub "PANEL WEB"
         case $SUB in
