@@ -44,6 +44,69 @@ center() {
 # ── Couvre chaque ligne du fond violet ──
 with_bg() { echo -ne "${BG}$1${RESET}"; }
 
+# ── Convertisseur d'octets en format lisible ──
+fmt_bytes() {
+    local b=$1
+    if ((b < 1024)); then echo "${b}B"; return; fi
+    if ((b < 1048576)); then awk "BEGIN{printf \"%.1f KB\", $b/1024}"; return; fi
+    if ((b < 1073741824)); then awk "BEGIN{printf \"%.1f MB\", $b/1048576}"; return; fi
+    if ((b < 1099511627776)); then awk "BEGIN{printf \"%.1f GB\", $b/1073741824}"; return; fi
+    awk "BEGIN{printf \"%.1f TB\", $b/1099511627776}"
+}
+
+# ── Collecte bande passante ──
+IFACE=$(ip route 2>/dev/null | awk '/default/{print $5; exit}' || echo "eth0")
+BW_DIR="/etc/kighmu/bandwidth"
+mkdir -p "$BW_DIR"
+
+get_bytes() {
+    awk -v iface="$IFACE" '$1 ~ iface":" {rx=$2; tx=$10; print rx+tx}' /proc/net/dev 2>/dev/null || echo 0
+}
+
+CUR_BYTES=$(get_bytes)
+TODAY=$(date +%Y-%m-%d)
+
+# Stocker le snapshot actuel
+echo "$CUR_BYTES" > "$BW_DIR/$TODAY"
+
+# Totaux accumulés
+BW_DAY=$CUR_BYTES
+prev=$CUR_BYTES
+if [[ -f "$BW_DIR/$TODAY.prev" ]]; then
+    prev=$(<"$BW_DIR/$TODAY.prev")
+fi
+BW_DAY=$((CUR_BYTES - prev))
+(( BW_DAY < 0 )) && BW_DAY=$CUR_BYTES
+echo "$CUR_BYTES" > "$BW_DIR/$TODAY.prev"
+
+# Semaine (7 derniers jours)
+BW_WEEK=0
+for d in $(date -d "6 days ago" +%Y-%m-%d 2>/dev/null; seq 0 6 | xargs -I{} date -d "{} days ago" +%Y-%m-%d 2>/dev/null); do
+    [[ -f "$BW_DIR/$d" ]] && BW_WEEK=$((BW_WEEK + $(<"$BW_DIR/$d")))
+done
+
+# Mois (30 derniers jours)
+BW_MONTH=0
+for d in $(seq 0 30 | xargs -I{} date -d "{} days ago" +%Y-%m-%d 2>/dev/null); do
+    [[ -f "$BW_DIR/$d" ]] && BW_MONTH=$((BW_MONTH + $(<"$BW_DIR/$d")))
+done
+
+BW_DAY_H=$(fmt_bytes $BW_DAY)
+BW_WEEK_H=$(fmt_bytes $BW_WEEK)
+BW_MONTH_H=$(fmt_bytes $BW_MONTH)
+
+# ── Quota coloré ──
+quota_color() {
+    local val=$1
+    if ((val < 1073741824)); then echo "${GREEN}";          # < 1GB
+    elif ((val < 5368709120)); then echo "${YELLOW}";       # 1-5GB
+    else echo "${ORANGE}"; fi                                 # > 5GB
+}
+
+C_DAY=$(quota_color $BW_DAY)
+C_WEEK=$(quota_color $BW_WEEK)
+C_MONTH=$(quota_color $BW_MONTH)
+
 # ── Données ──
 IP=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "127.0.0.1")
 DOMAIN=$(cat /etc/kighmu/domain.txt 2>/dev/null || cat /etc/xray/domain 2>/dev/null || echo "$IP")
@@ -90,6 +153,12 @@ draw_panel() {
     printf "${BG}║${RESET}  ${LAV}DOMAIN${RESET}         ${ORANGE}%-34s${RESET}${BG}║${RESET}\n" "$DOMAIN"
     printf "${BG}║${RESET}  ${LAV}NS SLOWDNS${RESET}     ${MAG}%-34s${RESET}${BG}║${RESET}\n" "$NS4"
     printf "${BG}║${RESET}  ${LAV}NS V2RAY${RESET}       ${MAG}%-34s${RESET}${BG}║${RESET}\n" "$NV4"
+
+    # ── Cadre QUOTA ──
+    local qd="${C_DAY}${BW_DAY_H}${RESET}" qw="${C_WEEK}${BW_WEEK_H}${RESET}" qm="${C_MONTH}${BW_MONTH_H}${RESET}"
+    printf "${BG}╠══════════════════════════════════════════════════════════════════════╣${RESET}\n"
+    printf "${BG}║${RESET}  ${ORANGE}>>${RESET} ${LAV}DATA QUOTA${RESET}  ${WHITE}Jour:${RESET} %b  ${WHITE}Semaine:${RESET} %b  ${WHITE}Mois:${RESET} %b  ${BG}║${RESET}\n" "$qd" "$qw" "$qm"
+    printf "${BG}╚══════════════════════════════════════════════════════════════════════╝${RESET}\n"
 
     # ── Séparateur + Account Info ──
     printf "${BG}╠══════════════════════════════════════════════════════════════════════╣${RESET}\n"
