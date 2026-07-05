@@ -127,12 +127,12 @@ install_mysql() {
     mysql -e "CREATE USER IF NOT EXISTS '${DB_USER}'@'localhost' IDENTIFIED BY '${DB_PASS}';" 2>/dev/null
     mysql -e "GRANT ALL PRIVILEGES ON ${DB_NAME}.* TO '${DB_USER}'@'localhost'; FLUSH PRIVILEGES;" 2>/dev/null
 
-    if [[ -f "$SCRIPT_DIR/schema.sql" ]]; then
-        mysql "${DB_NAME}" < "$SCRIPT_DIR/schema.sql" 2>/dev/null && log "Schema importé" || warn "Schema déjà présent"
-    elif [[ -f "$KIGHMU_DIR/schema.sql" ]]; then
-        mysql "${DB_NAME}" < "$KIGHMU_DIR/schema.sql" 2>/dev/null && log "Schema importé (Kighmu dir)" || warn "Schema déjà présent"
+    if [[ -f "$PANEL_DIR/schema.sql" ]]; then
+        mysql "${DB_NAME}" < "$PANEL_DIR/schema.sql" 2>/dev/null && log "Schema importé" || warn "Schema déjà présent"
+    elif [[ -f "$SCRIPT_DIR/panel.sh" ]]; then
+        source "$SCRIPT_DIR/panel.sh" && extract_web_panel "$PANEL_DIR" && mysql "${DB_NAME}" < "$PANEL_DIR/schema.sql" 2>/dev/null && log "Schema importé via panel.sh"
     else
-        curl -fsSL "https://raw.githubusercontent.com/kinf744/Tyiop24/main/schema.sql" -o /tmp/schema.sql 2>/dev/null && mysql "${DB_NAME}" < /tmp/schema.sql 2>/dev/null && log "Schema importé (GitHub)" && rm -f /tmp/schema.sql || warn "Schema non trouvé, création auto..."
+        curl -fsSL "https://raw.githubusercontent.com/kinf744/Tyiop24/main/panel.sh" -o /tmp/panel.sh 2>/dev/null && source /tmp/panel.sh && extract_web_panel "$PANEL_DIR" && mysql "${DB_NAME}" < "$PANEL_DIR/schema.sql" 2>/dev/null && log "Schema importé (GitHub)" && rm -f /tmp/panel.sh || warn "Schema non trouvé"
     fi
     log "Base de données prête"
 }
@@ -142,28 +142,24 @@ deploy_panel_files() {
     step_header '📁  Déploiement Panel  📁'
     mkdir -p "$PANEL_DIR/frontend/admin" "$PANEL_DIR/frontend/reseller" "$KIGHMU_DIR"
     local GH="https://raw.githubusercontent.com/kinf744/Tyiop24/main"
-    for f in server.js admin.html reseller.html package.json; do
-        if [[ -f "$SCRIPT_DIR/$f" ]]; then
-            cp "$SCRIPT_DIR/$f" "$PANEL_DIR/$f"
-        elif [[ -f "$KIGHMU_DIR/$f" ]]; then
-            cp "$KIGHMU_DIR/$f" "$PANEL_DIR/$f"
-        else
-            curl -fsSL "$GH/$f" -o "$PANEL_DIR/$f" 2>/dev/null || true
-        fi
-    done
-    for f in admin.html reseller.html; do
-        if [[ -f "$PANEL_DIR/$f" ]]; then
-            local d="${f%.html}"; mkdir -p "$PANEL_DIR/frontend/$d"
-            cp "$PANEL_DIR/$f" "$PANEL_DIR/frontend/$d/index.html"
-        fi
-    done
-    if [[ ! -f "$PANEL_DIR/frontend/index.html" ]]; then
-        cat > "$PANEL_DIR/frontend/index.html" << 'EOF'
-<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Kighmu Panel</title>
-<meta http-equiv="refresh" content="0;url=/admin/"></head><body><h1>Kighmu Panel</h1></body></html>
+    if [[ -f "$SCRIPT_DIR/panel.sh" ]]; then
+        source "$SCRIPT_DIR/panel.sh" && extract_web_panel "$PANEL_DIR" && log "Panel extrait de panel.sh"
+    elif [[ -f "$KIGHMU_DIR/panel.sh" ]]; then
+        source "$KIGHMU_DIR/panel.sh" && extract_web_panel "$PANEL_DIR" && log "Panel extrait de $KIGHMU_DIR/panel.sh"
+    else
+        curl -fsSL "$GH/panel.sh" -o /tmp/panel.sh 2>/dev/null && source /tmp/panel.sh && extract_web_panel "$PANEL_DIR" && rm -f /tmp/panel.sh && log "Panel téléchargé et extrait depuis GitHub"
+        if [[ ! -f "$PANEL_DIR/package.json" ]]; then
+            warn "Échec téléchargement panel.sh — création panel minimal"
+            cat > "$PANEL_DIR/package.json" << 'EOF'
+{"name":"kighmu-panel","version":"4.0.0","private":true,"dependencies":{"express":"^4.18.2","mysql2":"^3.6.0","bcryptjs":"^2.4.3","jsonwebtoken":"^9.0.2","cors":"^2.8.5","morgan":"^1.10.0","axios":"^1.6.0"}}
 EOF
+            cat > "$PANEL_DIR/server.js" << 'EOF'
+const express=require('express');const app=express();app.get('/',(r,s)=>s.send('Kighmu Panel'));app.listen(3000);
+EOF
+            echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Kighmu Panel</title></head><body><h1>Kighmu Panel</h1></body></html>' > "$PANEL_DIR/frontend/index.html"
+        fi
     fi
-    log "Fichiers déployés (server.js, admin.html, reseller.html, package.json)"
+    log "Fichiers panel déployés"
 }
 
 # ── .ENV ──
