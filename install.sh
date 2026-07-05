@@ -575,6 +575,39 @@ BWSVC
 }
 
 # ================================================
+# ÉTAPE 12 : PANEL DE CONTRÔLE (interface SSH)
+# ================================================
+deploy_control_panel() {
+    echo "${CYAN}━━━ Déploiement du panneau de contrôle SSH ━━━${RESET}"
+
+    # Télécharger et installer kighmu.sh
+    local panel_url="https://raw.githubusercontent.com/kinf744/Tyiop24/main/kighmu.sh"
+    mkdir -p /etc/kighmu
+    curl -fsSL "$panel_url" -o /etc/kighmu/panel.sh 2>/dev/null || {
+        warn "Impossible de télécharger kighmu.sh, copie locale..."
+        if [[ -f "$SCRIPT_DIR/kighmu.sh" ]]; then
+            cp "$SCRIPT_DIR/kighmu.sh" /etc/kighmu/panel.sh
+        else
+            err "Panneau de contrôle non disponible"
+            return 1
+        fi
+    }
+    chmod +x /etc/kighmu/panel.sh
+
+    # Créer le script de lancement dans /etc/profile.d
+    cat > /etc/profile.d/kighmu-panel.sh << 'PROF'
+#!/bin/bash
+# Lance le panneau Kighmu pour root
+if [[ $EUID -eq 0 && -f /etc/kighmu/panel.sh && -t 0 ]]; then
+    /etc/kighmu/panel.sh
+fi
+PROF
+    chmod +x /etc/profile.d/kighmu-panel.sh
+    log "Panneau de contrôle déployé (/etc/kighmu/panel.sh)"
+    log "Lancement automatique au prochain SSH"
+}
+
+# ================================================
 # NETTOYAGE POST-INSTALLATION
 # ================================================
 cleanup_scripts() {
@@ -638,6 +671,7 @@ full_install() {
     setup_nftables
     setup_traffic_collection
     setup_bandwidth_service
+    deploy_control_panel
 
     echo
     echo "${GREEN}${BOLD}✅ Installation terminée !${RESET}"
@@ -672,8 +706,11 @@ main_menu() {
         echo "  ${GREEN}[5]${RESET} Xray & V2Ray (VMess, VLESS, Trojan, Shadowsocks)"
         echo "  ${GREEN}[6]${RESET} Tunnels SSH (Dropbear, SlowDNS, SSL, WS, SOCKS)"
         echo
+        echo "${WHITE}Panneau de contrôle:${RESET}"
+        echo "  ${GREEN}[7]${RESET} Déployer le panneau de contrôle SSH"
+        echo
         echo "${WHITE}Sécurité:${RESET}"
-        echo "  ${GREEN}[7]${RESET} 🔒 Nettoyer les scripts d'installation du VPS"
+        echo "  ${GREEN}[8]${RESET} 🔒 Nettoyer les scripts d'installation du VPS"
         echo
         echo "  ${RED}[0]${RESET} Quitter"
         echo
@@ -686,7 +723,8 @@ main_menu() {
             4) bash "$SCRIPT_DIR/udp.sh" ;;
             5) bash "$SCRIPT_DIR/xray-v2ray.sh" ;;
             6) bash "$SCRIPT_DIR/ssh.sh" ;;
-            7) cleanup_scripts ;;
+            7) deploy_control_panel ;;
+            8) cleanup_scripts ;;
             0) exit 0 ;;
             *) ;;
         esac
