@@ -248,23 +248,26 @@ menu_ssh_vip() {
         sub_header '🔰  MENU SSH VIP  🔰'
         printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
         sub_row 1 "CREER COMPTE SSH"        2 "SUPPRIMER COMPTE"
-        sub_row 3 "LISTE COMPTES"           4 "MONITOR CONNEXIONS"
-        sub_row 5 "CHANGE PORT SSH"         6 "CHANGE BANNER"
+        sub_row 3 "LISTE COMPTES"           4 "RENEW COMPTE"
+        sub_row 5 "TRIAL 1 JOUR"            6 "CHECK EXPIRY"
         sub_row 7 "LOCK ACCOUNT"            8 "UNLOCK ACCOUNT"
-        sub_row 9 "MULTI-LOGIN"            10 "LIMITER BANDWIDTH"
-        sub_row 11 "BACKUP USERS"          12 "RESTORE USERS"
+        sub_row 9 "MONITOR CONNEXIONS"     10 "KILL CONNEXION"
+        sub_row 11 "CHANGE PORT SSH"       12 "CHANGE BANNER"
         sub_footer
         prompt_sub "SSH VIP"
         case $SUB in
-            1) clear; echo -e "${CYAN}━━ Création compte SSH ━━${RESET}"; read -rp "  Username: " u; read -rp "  Password: " p; read -rp "  Expire (jours): " e; useradd -e "$(date -d "+${e}days" +%Y-%m-%d)" -s /bin/bash "$u" 2>/dev/null && echo "$u:$p" | chpasswd && echo -e "${GREEN}  ✓ Compte $u créé${RESET}" || echo -e "${RED}  ✗ Échec${RESET}"; pause;;
-            2) clear; echo -e "${CYAN}━━ Suppression compte SSH ━━${RESET}"; read -rp "  Username: " u; userdel -r "$u" 2>/dev/null && echo -e "${GREEN}  ✓ Supprimé${RESET}" || echo -e "${RED}  ✗ Introuvable${RESET}"; pause;;
-            3) clear; echo -e "${CYAN}━━ Liste comptes SSH actifs ━━${RESET}"; awk -F: '$7~/bash|sh/ && $3>=1000 {print "  " $1}' /etc/passwd; pause;;
-            4) clear; echo -e "${CYAN}━━ Connexions actives ━━${RESET}"; who | awk '{print "  " $1 " depuis " $NF}'; pause;;
-            5) clear; echo -e "${CYAN}━━ Changer port SSH ━━${RESET}"; read -rp "  Nouveau port: " p; sed -i "s/^Port .*/Port $p/" /etc/ssh/sshd_config && systemctl restart ssh && echo -e "${GREEN}  ✓ Port changé en $p${RESET}"; pause;;
-            6) clear; echo -e "${CYAN}━━ Changer banner SSH ━━${RESET}"; read -rp "  Nouveau banner: " b; echo "$b" > /etc/ssh/banner.txt && echo -e "${GREEN}  ✓ OK${RESET}"; pause;;
-            7) clear; echo -e "${CYAN}━━ Lock account ━━${RESET}"; read -rp "  Username: " u; passwd -l "$u" 2>/dev/null && echo -e "${GREEN}  ✓ Compte bloqué${RESET}" || echo -e "${RED}  ✗ Échec${RESET}"; pause;;
-            8) clear; echo -e "${CYAN}━━ Unlock account ━━${RESET}"; read -rp "  Username: " u; passwd -u "$u" 2>/dev/null && echo -e "${GREEN}  ✓ Compte débloqué${RESET}" || echo -e "${RED}  ✗ Échec${RESET}"; pause;;
-            9|10|11|12) clear; echo -e "${YELLOW}  Option à implémenter${RESET}"; pause;;
+            1) clear; echo -e "${CYAN}━━ Création compte SSH ━━${RESET}"; read -rp "  Username: " u; read -rp "  Password: " p; read -rp "  Expire (jours): " e; useradd -e "$(date -d "+${e}days" +%Y-%m-%d)" -s /bin/bash "$u" 2>/dev/null && echo "$u:$p" | chpasswd && echo -e "${GREEN}  ✓ Compte $u créé (${e} jours)${RESET}" || echo -e "${RED}  ✗ Échec${RESET}"; pause;;
+            2) clear; echo -e "${CYAN}━━ Suppression ━━${RESET}"; read -rp "  Username: " u; userdel -r "$u" 2>/dev/null && echo -e "${GREEN}  ✓ Supprimé${RESET}" || echo -e "${RED}  ✗ Introuvable${RESET}"; pause;;
+            3) clear; echo -e "${CYAN}━━ Liste comptes SSH ━━${RESET}"; awk -F: '$7~/bash|sh/ && $3>=1000 {printf "  %-15s exp: ", $1; system("chage -l "$1" 2>/dev/null | grep \"Account expires\" | cut -d: -f2")}' /etc/passwd; pause;;
+            4) clear; echo -e "${CYAN}━━ Renew compte ━━${RESET}"; read -rp "  Username: " u; read -rp "  Jours suppl.: " e; chage -E "$(date -d "+${e}days" +%Y-%m-%d)" "$u" 2>/dev/null && echo -e "${GREEN}  ✓ Prolongé${RESET}" || echo -e "${RED}  ✗ Échec${RESET}"; pause;;
+            5) clear; echo -e "${CYAN}━━ Trial 1 jour ━━${RESET}"; read -rp "  Username: " u; read -rp "  Password: " p; useradd -e "$(date -d "+1day" +%Y-%m-%d)" -s /bin/bash "$u" 2>/dev/null && echo "$u:$p" | chpasswd && echo -e "${GREEN}  ✓ Trial $u créé (24h)${RESET}"; pause;;
+            6) clear; echo -e "${CYAN}━━ Check expiry ━━${RESET}"; read -rp "  Username: " u; chage -l "$u" 2>/dev/null | grep -E 'Account expires|Last change' || echo -e "${RED}  ✗ Compte introuvable${RESET}"; pause;;
+            7) clear; echo -e "${CYAN}━━ Lock ━━${RESET}"; read -rp "  Username: " u; passwd -l "$u" 2>/dev/null && echo -e "${GREEN}  ✓ Bloqué${RESET}" || echo -e "${RED}  ✗ Échec${RESET}"; pause;;
+            8) clear; echo -e "${CYAN}━━ Unlock ━━${RESET}"; read -rp "  Username: " u; passwd -u "$u" 2>/dev/null && echo -e "${GREEN}  ✓ Débloqué${RESET}" || echo -e "${RED}  ✗ Échec${RESET}"; pause;;
+            9) clear; echo -e "${CYAN}━━ Connexions actives ━━${RESET}"; who | awk '{print "  " $1 " depuis " $NF}'; echo; echo -e "${YELLOW}  Ctrl+C pour quitter${RESET}"; sleep 5; pause;;
+            10) clear; echo -e "${CYAN}━━ Kill connexion ━━${RESET}"; read -rp "  Username: " u; pkill -u "$u" 2>/dev/null && echo -e "${GREEN}  ✓ Connexions de $u fermées${RESET}" || echo -e "${RED}  ✗ Aucune active${RESET}"; pause;;
+            11) clear; echo -e "${CYAN}━━ Port SSH ━━${RESET}"; read -rp "  Nouveau port: " p; sed -i "s/^Port .*/Port $p/" /etc/ssh/sshd_config && systemctl restart ssh && echo -e "${GREEN}  ✓ Port → $p${RESET}"; pause;;
+            12) clear; echo -e "${CYAN}━━ Banner ━━${RESET}"; read -rp "  Nouveau banner: " b; echo "$b" > /etc/ssh/banner.txt && systemctl restart ssh && echo -e "${GREEN}  ✓ OK${RESET}"; pause;;
             0|q) break ;;
         esac
     done
@@ -274,16 +277,21 @@ menu_vmess() {
     while true; do
         sub_header '📡  MENU VMESS  📡'
         printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
-        sub_row 1 "CREER COMPTE VMESS"      2 "SUPPRIMER COMPTE"
+        sub_row 1 "CREER COMPTE"            2 "SUPPRIMER COMPTE"
         sub_row 3 "LISTE COMPTES"           4 "RENEW COMPTE"
-        sub_row 5 "MONITOR TRAFIC"          6 "EXPORT CONFIG"
+        sub_row 5 "TRIAL ACCOUNT"           6 "CHECK EXPIRY"
+        sub_row 7 "SHOW CONFIG"             8 "DELETE EXPIRED"
         sub_footer
         prompt_sub "VMESS"
         case $SUB in
-            1) clear; echo -e "${CYAN}━━ Création VMESS ━━${RESET}"; read -rp "  Username: " u; read -rp "  Expire (jours): " e; echo "{ \"vmess\": { \"$u\": \"$(date -d "+${e}days" +%Y-%m-%d)\" }}" | jq -c .vmess > /etc/xray/users.json 2>/dev/null && echo -e "${GREEN}  ✓ VMESS $u créé${RESET}" || echo -e "${RED}  ✗ Échec (Xray requis)${RESET}"; pause;;
-            2) clear; echo -e "${CYAN}━━ Suppression VMESS ━━${RESET}"; read -rp "  Username: " u; jq "del(.vmess.\"$u\")" /etc/xray/users.json 2>/dev/null > /tmp/xu.json && mv /tmp/xu.json /etc/xray/users.json && echo -e "${GREEN}  ✓ Supprimé${RESET}" || echo -e "${RED}  ✗ Échec${RESET}"; pause;;
-            3) clear; echo -e "${CYAN}━━ Liste VMESS ━━${RESET}"; jq -r '.vmess | to_entries[] | "  " + .key + " → " + .value' /etc/xray/users.json 2>/dev/null || echo "  Aucun compte"; pause;;
-            4|5|6) clear; echo -e "${YELLOW}  Option à implémenter${RESET}"; pause;;
+            1) clear; echo -e "${CYAN}━━ Création VMESS ━━${RESET}"; read -rp "  Username: " u; read -rp "  Expire (jours): " e; jq ".vmess.\"$u\" = \"$(date -d "+${e}days" +%Y-%m-%d)\"" /etc/xray/users.json 2>/dev/null > /tmp/xu.json && mv /tmp/xu.json /etc/xray/users.json && echo -e "${GREEN}  ✓ VMESS $u créé${RESET}" || echo -e "${RED}  ✗ Échec${RESET}"; pause;;
+            2) clear; echo -e "${CYAN}━━ Suppression ━━${RESET}"; read -rp "  Username: " u; jq "del(.vmess.\"$u\")" /etc/xray/users.json > /tmp/xu.json && mv /tmp/xu.json /etc/xray/users.json && echo -e "${GREEN}  ✓ Supprimé${RESET}"; pause;;
+            3) clear; echo -e "${CYAN}━━ Liste VMESS ━━${RESET}"; jq -r '.vmess | to_entries[] | "  " + .key + " → " + .value' /etc/xray/users.json 2>/dev/null || echo "  Aucun"; pause;;
+            4) clear; echo -e "${CYAN}━━ Renew ━━${RESET}"; read -rp "  Username: " u; read -rp "  Jours suppl.: " e; jq ".vmess.\"$u\" = \"$(date -d "+${e}days" +%Y-%m-%d)\"" /etc/xray/users.json > /tmp/xu.json && mv /tmp/xu.json /etc/xray/users.json && echo -e "${GREEN}  ✓ Prolongé${RESET}"; pause;;
+            5) clear; echo -e "${CYAN}━━ Trial 1j ━━${RESET}"; read -rp "  Username: " u; jq ".vmess.\"$u\" = \"$(date -d "+1day" +%Y-%m-%d)\"" /etc/xray/users.json > /tmp/xu.json && mv /tmp/xu.json /etc/xray/users.json && echo -e "${GREEN}  ✓ Trial $u créé${RESET}"; pause;;
+            6) clear; echo -e "${CYAN}━━ Check expiry ━━${RESET}"; read -rp "  Username: " u; jq -r ".vmess.\"$u\" // \"Introuvable\"" /etc/xray/users.json 2>/dev/null; pause;;
+            7) clear; echo -e "${CYAN}━━ Config VMESS ━━${RESET}"; read -rp "  Username: " u; local d="${DOMAIN:-$IP}"; echo "  server: $d, port: 8443, uuid: $(jq -r ".vmess.\"$u\"" /etc/xray/users.json 2>/dev/null || echo '?')"; pause;;
+            8) clear; echo -e "${CYAN}━━ Suppression expirés ━━${RESET}"; local t=$(date +%s); jq --arg t "$t" '.vmess |= with_entries(select(.value | strptime("%Y-%m-%d") | mktime > ($t|tonumber)))' /etc/xray/users.json > /tmp/xu.json && mv /tmp/xu.json /etc/xray/users.json && echo -e "${GREEN}  ✓ Nettoyé${RESET}"; pause;;
             0|q) break ;;
         esac
     done
@@ -293,15 +301,21 @@ menu_vless() {
     while true; do
         sub_header '📡  MENU VLESS  📡'
         printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
-        sub_row 1 "CREER COMPTE VLESS"      2 "SUPPRIMER COMPTE"
+        sub_row 1 "CREER COMPTE"            2 "SUPPRIMER COMPTE"
         sub_row 3 "LISTE COMPTES"           4 "RENEW COMPTE"
+        sub_row 5 "TRIAL ACCOUNT"           6 "CHECK EXPIRY"
+        sub_row 7 "SHOW CONFIG"             8 "DELETE EXPIRED"
         sub_footer
         prompt_sub "VLESS"
         case $SUB in
-            1) clear; echo -e "${CYAN}━━ Création VLESS ━━${RESET}"; read -rp "  Username: " u; read -rp "  Expire (jours): " e; jq ".vless.\"$u\" = \"$(date -d "+${e}days" +%Y-%m-%d)\"" /etc/xray/users.json 2>/dev/null > /tmp/xu.json && mv /tmp/xu.json /etc/xray/users.json && echo -e "${GREEN}  ✓ Créé${RESET}" || echo -e "${RED}  ✗ Échec${RESET}"; pause;;
-            2) clear; echo -e "${CYAN}━━ Suppression VLESS ━━${RESET}"; read -rp "  Username: " u; jq "del(.vless.\"$u\")" /etc/xray/users.json > /tmp/xu.json && mv /tmp/xu.json /etc/xray/users.json && echo -e "${GREEN}  ✓ Supprimé${RESET}"; pause;;
+            1) clear; echo -e "${CYAN}━━ Création VLESS ━━${RESET}"; read -rp "  Username: " u; read -rp "  Expire (jours): " e; jq ".vless.\"$u\" = \"$(date -d "+${e}days" +%Y-%m-%d)\"" /etc/xray/users.json > /tmp/xu.json && mv /tmp/xu.json /etc/xray/users.json && echo -e "${GREEN}  ✓ Créé${RESET}"; pause;;
+            2) clear; echo -e "${CYAN}━━ Suppression ━━${RESET}"; read -rp "  Username: " u; jq "del(.vless.\"$u\")" /etc/xray/users.json > /tmp/xu.json && mv /tmp/xu.json /etc/xray/users.json && echo -e "${GREEN}  ✓ Supprimé${RESET}"; pause;;
             3) clear; echo -e "${CYAN}━━ Liste VLESS ━━${RESET}"; jq -r '.vless | to_entries[] | "  " + .key + " → " + .value' /etc/xray/users.json 2>/dev/null || echo "  Aucun"; pause;;
-            4|*) clear; echo -e "${YELLOW}  Option à implémenter${RESET}"; pause;;
+            4) clear; echo -e "${CYAN}━━ Renew ━━${RESET}"; read -rp "  Username: " u; read -rp "  Jours: " e; jq ".vless.\"$u\" = \"$(date -d "+${e}days" +%Y-%m-%d)\"" /etc/xray/users.json > /tmp/xu.json && mv /tmp/xu.json /etc/xray/users.json && echo -e "${GREEN}  ✓ Prolongé${RESET}"; pause;;
+            5) clear; echo -e "${CYAN}━━ Trial 1j ━━${RESET}"; read -rp "  Username: " u; jq ".vless.\"$u\" = \"$(date -d "+1day" +%Y-%m-%d)\"" /etc/xray/users.json > /tmp/xu.json && mv /tmp/xu.json /etc/xray/users.json && echo -e "${GREEN}  ✓ Trial $u créé${RESET}"; pause;;
+            6) clear; echo -e "${CYAN}━━ Check ━━${RESET}"; read -rp "  Username: " u; jq -r ".vless.\"$u\" // \"Introuvable\"" /etc/xray/users.json 2>/dev/null; pause;;
+            7) clear; echo -e "${CYAN}━━ Config ━━${RESET}"; read -rp "  Username: " u; echo "  ${DOMAIN:-$IP}:8443, flow: xtls-rprx-vision"; pause;;
+            8) clear; echo -e "${CYAN}━━ Suppression expirés ━━${RESET}"; local t=$(date +%s); jq --arg t "$t" '.vless |= with_entries(select(.value | strptime("%Y-%m-%d") | mktime > ($t|tonumber)))' /etc/xray/users.json > /tmp/xu.json && mv /tmp/xu.json /etc/xray/users.json && echo -e "${GREEN}  ✓ Nettoyé${RESET}"; pause;;
             0|q) break ;;
         esac
     done
@@ -311,15 +325,21 @@ menu_trojan() {
     while true; do
         sub_header '🔒  MENU TROJAN  🔒'
         printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
-        sub_row 1 "CREER COMPTE TROJAN"     2 "SUPPRIMER COMPTE"
-        sub_row 3 "LISTE COMPTES"           4 "SHOW CONFIG"
+        sub_row 1 "CREER COMPTE"            2 "SUPPRIMER COMPTE"
+        sub_row 3 "LISTE COMPTES"           4 "RENEW COMPTE"
+        sub_row 5 "TRIAL ACCOUNT"           6 "CHECK EXPIRY"
+        sub_row 7 "SHOW CONFIG"             8 "DELETE EXPIRED"
         sub_footer
         prompt_sub "TROJAN"
         case $SUB in
             1) clear; echo -e "${CYAN}━━ Création Trojan ━━${RESET}"; read -rp "  Password: " p; read -rp "  Expire (jours): " e; jq ".trojan += [{\"password\":\"$p\",\"exp\":\"$(date -d "+${e}days" +%Y-%m-%d)\"}]" /etc/xray/users.json > /tmp/xu.json && mv /tmp/xu.json /etc/xray/users.json && echo -e "${GREEN}  ✓ Créé${RESET}"; pause;;
-            2) clear; echo -e "${CYAN}━━ Suppression Trojan ━━${RESET}"; read -rp "  Password: " p; jq "del(.trojan[] | select(.password==\"$p\"))" /etc/xray/users.json > /tmp/xu.json && mv /tmp/xu.json /etc/xray/users.json && echo -e "${GREEN}  ✓ Supprimé${RESET}"; pause;;
-            3) clear; echo -e "${CYAN}━━ Liste Trojan ━━${RESET}"; jq -r '.trojan[] | "  " + .password + " → " + .exp' /etc/xray/users.json 2>/dev/null || echo "  Aucun"; pause;;
-            4) clear; echo -e "${CYAN}━━ Config Trojan ━━${RESET}"; echo "  Trojan : 8443"; pause;;
+            2) clear; echo -e "${CYAN}━━ Suppression ━━${RESET}"; read -rp "  Password: " p; jq "del(.trojan[] | select(.password==\"$p\"))" /etc/xray/users.json > /tmp/xu.json && mv /tmp/xu.json /etc/xray/users.json && echo -e "${GREEN}  ✓ Supprimé${RESET}"; pause;;
+            3) clear; echo -e "${CYAN}━━ Liste ━━${RESET}"; jq -r '.trojan[] | "  " + .password + " → " + .exp' /etc/xray/users.json 2>/dev/null || echo "  Aucun"; pause;;
+            4) clear; echo -e "${CYAN}━━ Renew ━━${RESET}"; read -rp "  Password: " p; read -rp "  Jours: " e; jq "(.[] | select(.password==\"$p\").exp) = \"$(date -d "+${e}days" +%Y-%m-%d)\"" /etc/xray/users.json > /tmp/xu.json && mv /tmp/xu.json /etc/xray/users.json && echo -e "${GREEN}  ✓ Prolongé${RESET}"; pause;;
+            5) clear; echo -e "${CYAN}━━ Trial 1j ━━${RESET}"; read -rp "  Password: " p; jq ".trojan += [{\"password\":\"$p\",\"exp\":\"$(date -d "+1day" +%Y-%m-%d)\"}]" /etc/xray/users.json > /tmp/xu.json && mv /tmp/xu.json /etc/xray/users.json && echo -e "${GREEN}  ✓ Trial $p créé${RESET}"; pause;;
+            6) clear; echo -e "${CYAN}━━ Check ━━${RESET}"; read -rp "  Password: " p; jq -r '.trojan[] | select(.password=="'"$p"'") | .exp' /etc/xray/users.json 2>/dev/null || echo "  Introuvable"; pause;;
+            7) clear; echo -e "${CYAN}━━ Config ━━${RESET}"; echo "  ${DOMAIN:-$IP}:8443, security: tls"; pause;;
+            8) clear; echo -e "${CYAN}━━ Suppression expirés ━━${RESET}"; local t=$(date +%s); jq --arg t "$t" '.trojan |= map(select(.exp | strptime("%Y-%m-%d") | mktime > ($t|tonumber)))' /etc/xray/users.json > /tmp/xu.json && mv /tmp/xu.json /etc/xray/users.json && echo -e "${GREEN}  ✓ Nettoyé${RESET}"; pause;;
             0|q) break ;;
         esac
     done
@@ -330,14 +350,20 @@ menu_shadow() {
         sub_header '🌑  MENU SHADOWSOCKS  🌑'
         printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
         sub_row 1 "CREER COMPTE"            2 "SUPPRIMER COMPTE"
-        sub_row 3 "LISTE COMPTES"           4 "SHOW CONFIG"
+        sub_row 3 "LISTE COMPTES"           4 "RENEW COMPTE"
+        sub_row 5 "TRIAL ACCOUNT"           6 "CHECK EXPIRY"
+        sub_row 7 "SHOW CONFIG"             8 "DELETE EXPIRED"
         sub_footer
         prompt_sub "SHADOWSOCKS"
         case $SUB in
-            1) clear; echo -e "${CYAN}━━ Création Shadowsocks ━━${RESET}"; read -rp "  Password: " p; read -rp "  Expire (jours): " e; jq ".shadow += [{\"password\":\"$p\",\"exp\":\"$(date -d "+${e}days" +%Y-%m-%d)\"}]" /etc/xray/users.json > /tmp/xu.json && mv /tmp/xu.json /etc/xray/users.json && echo -e "${GREEN}  ✓ Créé${RESET}"; pause;;
-            2) clear; echo -e "${CYAN}━━ Suppression Shadowsocks ━━${RESET}"; read -rp "  Password: " p; jq "del(.shadow[] | select(.password==\"$p\"))" /etc/xray/users.json > /tmp/xu.json && mv /tmp/xu.json /etc/xray/users.json && echo -e "${GREEN}  ✓ Supprimé${RESET}"; pause;;
-            3) clear; echo -e "${CYAN}━━ Liste Shadowsocks ━━${RESET}"; jq -r '.shadow[] | "  " + .password + " → " + .exp' /etc/xray/users.json 2>/dev/null || echo "  Aucun"; pause;;
-            4) clear; echo -e "${CYAN}━━ Config Shadowsocks ━━${RESET}"; echo "  Shadowsocks : 8443 (method: aes-256-gcm)"; pause;;
+            1) clear; echo -e "${CYAN}━━ Création SS ━━${RESET}"; read -rp "  Password: " p; read -rp "  Expire (jours): " e; jq ".shadow += [{\"password\":\"$p\",\"exp\":\"$(date -d "+${e}days" +%Y-%m-%d)\"}]" /etc/xray/users.json > /tmp/xu.json && mv /tmp/xu.json /etc/xray/users.json && echo -e "${GREEN}  ✓ Créé${RESET}"; pause;;
+            2) clear; echo -e "${CYAN}━━ Suppression ━━${RESET}"; read -rp "  Password: " p; jq "del(.shadow[] | select(.password==\"$p\"))" /etc/xray/users.json > /tmp/xu.json && mv /tmp/xu.json /etc/xray/users.json && echo -e "${GREEN}  ✓ Supprimé${RESET}"; pause;;
+            3) clear; echo -e "${CYAN}━━ Liste ━━${RESET}"; jq -r '.shadow[] | "  " + .password + " → " + .exp' /etc/xray/users.json 2>/dev/null || echo "  Aucun"; pause;;
+            4) clear; echo -e "${CYAN}━━ Renew ━━${RESET}"; read -rp "  Password: " p; read -rp "  Jours: " e; jq "(.[] | select(.password==\"$p\").exp) = \"$(date -d "+${e}days" +%Y-%m-%d)\"" /etc/xray/users.json > /tmp/xu.json && mv /tmp/xu.json /etc/xray/users.json && echo -e "${GREEN}  ✓ Prolongé${RESET}"; pause;;
+            5) clear; echo -e "${CYAN}━━ Trial ━━${RESET}"; read -rp "  Password: " p; jq ".shadow += [{\"password\":\"$p\",\"exp\":\"$(date -d "+1day" +%Y-%m-%d)\"}]" /etc/xray/users.json > /tmp/xu.json && mv /tmp/xu.json /etc/xray/users.json && echo -e "${GREEN}  ✓ Trial créé${RESET}"; pause;;
+            6) clear; echo -e "${CYAN}━━ Check ━━${RESET}"; read -rp "  Password: " p; jq -r '.shadow[] | select(.password=="'"$p"'") | .exp' /etc/xray/users.json 2>/dev/null || echo "  Introuvable"; pause;;
+            7) clear; echo -e "${CYAN}━━ Config ━━${RESET}"; echo "  ${DOMAIN:-$IP}:8443, method: aes-256-gcm"; pause;;
+            8) clear; echo -e "${CYAN}━━ Suppression expirés ━━${RESET}"; local t=$(date +%s); jq --arg t "$t" '.shadow |= map(select(.exp | strptime("%Y-%m-%d") | mktime > ($t|tonumber)))' /etc/xray/users.json > /tmp/xu.json && mv /tmp/xu.json /etc/xray/users.json && echo -e "${GREEN}  ✓ Nettoyé${RESET}"; pause;;
             0|q) break ;;
         esac
     done
@@ -347,15 +373,21 @@ menu_zivpn() {
     while true; do
         sub_header '🌐  MENU ZIVPN  🌐'
         printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
-        sub_row 1 "CREER COMPTE ZIVPN"      2 "SUPPRIMER COMPTE"
+        sub_row 1 "CREER COMPTE"            2 "SUPPRIMER COMPTE"
         sub_row 3 "LISTE COMPTES"           4 "RENEW COMPTE"
+        sub_row 5 "TRIAL ACCOUNT"           6 "CHECK EXPIRY"
+        sub_row 7 "SHOW CONFIG"             8 "DELETE EXPIRED"
         sub_footer
         prompt_sub "ZIVPN"
         case $SUB in
-            1) clear; echo -e "${CYAN}━━ Création ZIVPN ━━${RESET}"; read -rp "  Username: " u; read -rp "  Expire (jours): " e; echo "$u|$(date -d "+${e}days" +%Y-%m-%d)" >> /etc/zivpn/users.list && echo -e "${GREEN}  ✓ Compte ZIVPN $u créé${RESET}" || echo -e "${RED}  ✗ Échec${RESET}"; pause;;
-            2) clear; echo -e "${CYAN}━━ Suppression ZIVPN ━━${RESET}"; read -rp "  Username: " u; sed -i "/^$u|/d" /etc/zivpn/users.list 2>/dev/null || true; echo -e "${GREEN}  ✓ Supprimé${RESET}"; pause;;
-            3) clear; echo -e "${CYAN}━━ Liste ZIVPN ━━${RESET}"; [[ -f /etc/zivpn/users.list ]] && cat /etc/zivpn/users.list | awk -F'|' '{print "  " $1 " → " $2}' || echo "  Aucun"; pause;;
-            4) clear; echo -e "${CYAN}━━ Renew ZIVPN ━━${RESET}"; read -rp "  Username: " u; read -rp "  Jours suppl.: " e; sed -i "/^$u|/s|.*|$u|$(date -d "+${e}days" +%Y-%m-%d)|" /etc/zivpn/users.list && echo -e "${GREEN}  ✓ Prolongé${RESET}"; pause;;
+            1) clear; echo -e "${CYAN}━━ Création ZIVPN ━━${RESET}"; read -rp "  Username: " u; read -rp "  Password: " p; read -rp "  Expire (jours): " e; echo "$u|$p|$(date -d "+${e}days" +%Y-%m-%d)" >> /etc/zivpn/users.list && echo -e "${GREEN}  ✓ $u créé${RESET}" || echo -e "${RED}  ✗ Échec${RESET}"; pause;;
+            2) clear; echo -e "${CYAN}━━ Suppression ━━${RESET}"; read -rp "  Username: " u; sed -i "/^$u|/d" /etc/zivpn/users.list 2>/dev/null || true; echo -e "${GREEN}  ✓ Supprimé${RESET}"; pause;;
+            3) clear; echo -e "${CYAN}━━ Liste ━━${RESET}"; [[ -f /etc/zivpn/users.list ]] && cat /etc/zivpn/users.list | awk -F'|' '{print "  " $1 " → " $3}' || echo "  Aucun"; pause;;
+            4) clear; echo -e "${CYAN}━━ Renew ━━${RESET}"; read -rp "  Username: " u; read -rp "  Jours: " e; sed -i "/^$u|/s|[^|]*$|$(date -d "+${e}days" +%Y-%m-%d)|" /etc/zivpn/users.list 2>/dev/null && echo -e "${GREEN}  ✓ Prolongé${RESET}"; pause;;
+            5) clear; echo -e "${CYAN}━━ Trial ━━${RESET}"; read -rp "  Username: " u; read -rp "  Password: " p; echo "$u|$p|$(date -d "+1day" +%Y-%m-%d)" >> /etc/zivpn/users.list && echo -e "${GREEN}  ✓ Trial $u créé${RESET}"; pause;;
+            6) clear; echo -e "${CYAN}━━ Check ━━${RESET}"; read -rp "  Username: " u; awk -F'|' -v u="$u" '$1==u{print "  Expire: " $3}' /etc/zivpn/users.list 2>/dev/null || echo "  Introuvable"; pause;;
+            7) clear; echo -e "${CYAN}━━ Config ━━${RESET}"; echo "  ${DOMAIN:-$IP}:20000 (UDP)"; pause;;
+            8) clear; echo -e "${CYAN}━━ Suppression expirés ━━${RESET}"; local t=$(date +%s); [[ -f /etc/zivpn/users.list ]] && awk -F'|' -v t="$t" 'system("date -d "$3" +%s") >= t' /etc/zivpn/users.list > /tmp/zu.list && mv /tmp/zu.list /etc/zivpn/users.list; echo -e "${GREEN}  ✓ Nettoyé${RESET}"; pause;;
             0|q) break ;;
         esac
     done
@@ -365,15 +397,21 @@ menu_hysteria() {
     while true; do
         sub_header '⚡  MENU HYSTERIA  ⚡'
         printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
-        sub_row 1 "CREER COMPTE HYSTERIA"   2 "SUPPRIMER COMPTE"
+        sub_row 1 "CREER COMPTE"            2 "SUPPRIMER COMPTE"
         sub_row 3 "LISTE COMPTES"           4 "RENEW COMPTE"
+        sub_row 5 "TRIAL ACCOUNT"           6 "CHECK EXPIRY"
+        sub_row 7 "SHOW CONFIG"             8 "DELETE EXPIRED"
         sub_footer
         prompt_sub "HYSTERIA"
         case $SUB in
-            1) clear; echo -e "${CYAN}━━ Création Hysteria ━━${RESET}"; read -rp "  Username: " u; read -rp "  Expire (jours): " e; echo "$u|$(date -d "+${e}days" +%Y-%m-%d)" >> /etc/hysteria/users.txt 2>/dev/null && echo -e "${GREEN}  ✓ Compte $u créé${RESET}" || echo -e "${RED}  ✗ Échec${RESET}"; pause;;
-            2) clear; echo -e "${CYAN}━━ Suppression Hysteria ━━${RESET}"; read -rp "  Username: " u; sed -i "/^$u|/d" /etc/hysteria/users.txt 2>/dev/null || true; echo -e "${GREEN}  ✓ Supprimé${RESET}"; pause;;
-            3) clear; echo -e "${CYAN}━━ Liste Hysteria ━━${RESET}"; [[ -f /etc/hysteria/users.txt ]] && cat /etc/hysteria/users.txt | awk -F'|' '{print "  " $1 " → " $2}' || echo "  Aucun"; pause;;
-            4) clear; echo -e "${CYAN}━━ Renew Hysteria ━━${RESET}"; read -rp "  Username: " u; read -rp "  Jours suppl.: " e; sed -i "/^$u|/s|.*|$u|$(date -d "+${e}days" +%Y-%m-%d)|" /etc/hysteria/users.txt 2>/dev/null && echo -e "${GREEN}  ✓ Prolongé${RESET}"; pause;;
+            1) clear; echo -e "${CYAN}━━ Création Hysteria ━━${RESET}"; read -rp "  Username: " u; read -rp "  Password: " p; read -rp "  Expire (jours): " e; echo "$u|$p|$(date -d "+${e}days" +%Y-%m-%d)" >> /etc/hysteria/users.txt 2>/dev/null && echo -e "${GREEN}  ✓ $u créé${RESET}"; pause;;
+            2) clear; echo -e "${CYAN}━━ Suppression ━━${RESET}"; read -rp "  Username: " u; sed -i "/^$u|/d" /etc/hysteria/users.txt 2>/dev/null || true; echo -e "${GREEN}  ✓ Supprimé${RESET}"; pause;;
+            3) clear; echo -e "${CYAN}━━ Liste ━━${RESET}"; [[ -f /etc/hysteria/users.txt ]] && cat /etc/hysteria/users.txt | awk -F'|' '{print "  " $1 " → " $3}' || echo "  Aucun"; pause;;
+            4) clear; echo -e "${CYAN}━━ Renew ━━${RESET}"; read -rp "  Username: " u; read -rp "  Jours: " e; sed -i "/^$u|/s|[^|]*$|$(date -d "+${e}days" +%Y-%m-%d)|" /etc/hysteria/users.txt 2>/dev/null && echo -e "${GREEN}  ✓ Prolongé${RESET}"; pause;;
+            5) clear; echo -e "${CYAN}━━ Trial ━━${RESET}"; read -rp "  Username: " u; read -rp "  Password: " p; echo "$u|$p|$(date -d "+1day" +%Y-%m-%d)" >> /etc/hysteria/users.txt && echo -e "${GREEN}  ✓ Trial $u créé${RESET}"; pause;;
+            6) clear; echo -e "${CYAN}━━ Check ━━${RESET}"; read -rp "  Username: " u; awk -F'|' -v u="$u" '$1==u{print "  Expire: " $3}' /etc/hysteria/users.txt 2>/dev/null || echo "  Introuvable"; pause;;
+            7) clear; echo -e "${CYAN}━━ Config ━━${RESET}"; echo "  ${DOMAIN:-$IP}:5401 (UDP)"; pause;;
+            8) clear; echo -e "${CYAN}━━ Suppression expirés ━━${RESET}"; local t=$(date +%s); [[ -f /etc/hysteria/users.txt ]] && awk -F'|' -v t="$t" 'system("date -d "$3" +%s") >= t' /etc/hysteria/users.txt > /tmp/hy.list && mv /tmp/hy.list /etc/hysteria/users.txt; echo -e "${GREEN}  ✓ Nettoyé${RESET}"; pause;;
             0|q) break ;;
         esac
     done
