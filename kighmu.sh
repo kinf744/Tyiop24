@@ -214,11 +214,52 @@ draw_panel() {
     echo -e "${RESET}"
 }
 
-# ── Boucle ──
+# ================================================
+# SOUS-MENU SSH VIP
+# ================================================
+menu_ssh_vip() {
+    while true; do
+        echo -e "${CLR}${BG}"
+        echo -e "${BG}${CYAN}╔═══$(printf '═%.0s' {1..67})═══╗${RESET}"
+        echo -e "${BG}${CYAN}║${RESET}${TITLE_BG}$(center '🔰  MENU SSH VIP  🔰' 71)${RESET}${BG}${CYAN}║${RESET}"
+        echo -e "${BG}${CYAN}╚═══$(printf '═%.0s' {1..67})═══╝${RESET}"
+
+        printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
+        printf "${BG}║${RESET}  ${ORANGE}[01]${RESET} ${WHITE}CREER COMPTE SSH${RESET}          ${ORANGE}[02]${RESET} ${WHITE}SUPPRIMER COMPTE${RESET}       ${BG}║${RESET}\n"
+        printf "${BG}║${RESET}  ${ORANGE}[03]${RESET} ${WHITE}LISTE COMPTES${RESET}             ${ORANGE}[04]${RESET} ${WHITE}MONITOR CONNEXIONS${RESET}    ${BG}║${RESET}\n"
+        printf "${BG}║${RESET}  ${ORANGE}[05]${RESET} ${WHITE}CHANGE PORT SSH${RESET}           ${ORANGE}[06]${RESET} ${WHITE}CHANGE BANNER${RESET}         ${BG}║${RESET}\n"
+        printf "${BG}║${RESET}  ${ORANGE}[07]${RESET} ${WHITE}LOCK ACCOUNT${RESET}              ${ORANGE}[08]${RESET} ${WHITE}UNLOCK ACCOUNT${RESET}        ${BG}║${RESET}\n"
+        printf "${BG}║${RESET}  ${ORANGE}[09]${RESET} ${WHITE}AJOUTER MULTI-LOGIN${RESET}       ${ORANGE}[10]${RESET} ${WHITE}LIMITER BANDWIDTH${RESET}     ${BG}║${RESET}\n"
+        printf "${BG}║${RESET}  ${ORANGE}[11]${RESET} ${WHITE}BACKUP USERS${RESET}              ${ORANGE}[12]${RESET} ${WHITE}RESTORE USERS${RESET}        ${BG}║${RESET}\n"
+        printf "${BG}╠══════════════════════════════════════════════════════════════════════╣${RESET}\n"
+        printf "${BG}║${RESET}  ${RED}[0]${RESET} ${YELLOW}RETOUR AU MENU PRINCIPAL${RESET}                                      ${BG}║${RESET}\n"
+        echo -e "${BG}${CYAN}╚═══$(printf '═%.0s' {1..67})═══╝${RESET}"
+        echo
+        echo -ne "${BG}${LAV}  SSH VIP »${RESET} ${WHITE}"
+        read -r SUB
+        echo -e "${RESET}"
+        case $SUB in
+            1) clear; echo -e "${CYAN}━━ Création compte SSH ━━${RESET}"; read -rp "Username: " u; read -rp "Password: " p; read -rp "Expire (jours): " e; useradd -e "$(date -d "+${e}days" +%Y-%m-%d)" -s /bin/bash "$u" 2>/dev/null && echo "$u:$p" | chpasswd && echo -e "${GREEN}✓ Compte $u créé${RESET}" || echo -e "${RED}✗ Échec${RESET}"; pause;;
+            2) clear; echo -e "${CYAN}━━ Suppression compte SSH ━━${RESET}"; read -rp "Username: " u; userdel -r "$u" 2>/dev/null && echo -e "${GREEN}✓ Supprimé${RESET}" || echo -e "${RED}✗ Introuvable${RESET}"; pause;;
+            3) clear; echo -e "${CYAN}━━ Liste comptes SSH actifs ━━${RESET}"; awk -F: '$7~/bash|sh/ && $3>=1000 {print "  " $1}' /etc/passwd; pause;;
+            4) clear; echo -e "${CYAN}━━ Connexions actives ━━${RESET}"; who | awk '{print "  " $1 " depuis " $NF}'; echo; echo -e "${YELLOW}Appuyez sur Ctrl+C pour quitter${RESET}"; sleep 5;;
+            5) clear; echo -e "${CYAN}━━ Changer port SSH ━━${RESET}"; read -rp "Nouveau port: " p; sed -i "s/^Port .*/Port $p/" /etc/ssh/sshd_config && systemctl restart ssh && echo -e "${GREEN}✓ Port changé en $p${RESET}"; pause;;
+            6) clear; echo -e "${CYAN}━━ Changer banner SSH ━━${RESET}"; read -rp "Nouveau banner: " b; echo "$b" > /etc/ssh/banner.txt && echo -e "${GREEN}✓ OK${RESET}"; pause;;
+            7|8) clear; echo -e "${YELLOW}Option à implémenter${RESET}"; pause;;
+            9|10|11|12) clear; echo -e "${YELLOW}Option à implémenter${RESET}"; pause;;
+            0|q) break ;;
+            *) ;;
+        esac
+    done
+}
+
+# ================================================
+# BOUCLE PRINCIPALE
+# ================================================
 while true; do
     draw_panel
     case $CHOIX in
-        1) bash -c "$(curl -fsSL https://raw.githubusercontent.com/kinf744/Tyiop24/main/udp.sh 2>/dev/null || echo 'echo Erreur telechargement')" ;;
+        1) menu_ssh_vip ;;
         2) bash -c "$(curl -fsSL https://raw.githubusercontent.com/kinf744/Tyiop24/main/xray-v2ray.sh 2>/dev/null)" ;;
         3) bash -c "$(curl -fsSL https://raw.githubusercontent.com/kinf744/Tyiop24/main/xray-v2ray.sh 2>/dev/null)" ;; # V2Ray
         4) bash -c "$(curl -fsSL https://raw.githubusercontent.com/kinf744/Tyiop24/main/ssh.sh 2>/dev/null)" ;;
