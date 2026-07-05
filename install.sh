@@ -393,18 +393,18 @@ deploy_control_panel() {
     step_header '🎛️  Panneau de Contrôle SSH  🎛️'
     mkdir -p /etc/kighmu
     # Extraire le code du panneau depuis la fin de ce script (marqueurs PANEL_CODE)
-    sed -n '/^# PANEL_CODE_START$/,/^# PANEL_CODE_END$/p' "$0" | tail -n +2 | head -n -1 > /etc/kighmu/panel.sh || {
+    sed -n '/^# PANEL_CODE_START$/,/^# PANEL_CODE_END$/p' "$0" | tail -n +2 | head -n -1 > /etc/kighmu-v2/panel.sh || {
         err "Extraction du panneau échouée"; return 1;
     }
-    chmod +x /etc/kighmu/panel.sh
+    chmod +x /etc/kighmu-v2/panel.sh
     cat > /etc/profile.d/kighmu-panel.sh << 'PROF'
 #!/bin/bash
-if [[ $EUID -eq 0 && -f /etc/kighmu/panel.sh && -t 0 ]]; then
-    /etc/kighmu/panel.sh
+if [[ $EUID -eq 0 && -f /etc/kighmu-v2/panel.sh && -t 0 ]]; then
+    /etc/kighmu-v2/panel.sh
 fi
 PROF
     chmod +x /etc/profile.d/kighmu-panel.sh
-    log "Panel déployé (/etc/kighmu/panel.sh)"
+    log "Panel déployé (/etc/kighmu-v2/panel.sh)"
     log "Lancement auto au prochain SSH"
 }
 
@@ -1275,7 +1275,7 @@ menu_up_script() {
     sub_footer
     prompt_sub "CONFIRMER (o/N)"
     if [[ "$SUB" =~ ^[oO]$ ]]; then
-        curl -fsSL "https://raw.githubusercontent.com/kinf744/Tyiop24/main/kighmu.sh" -o /etc/kighmu/panel.sh.new && mv /etc/kighmu/panel.sh.new /etc/kighmu/panel.sh && chmod +x /etc/kighmu/panel.sh && echo -e "${GREEN}  ✓ Panneau mis à jour. Reconnectez-vous.${RESET}" && exit 0 || echo -e "${RED}  ✗ Échec mise à jour${RESET}"; pause
+        curl -fsSL "https://raw.githubusercontent.com/kinf744/Tyiop24/main/kighmu.sh" -o /etc/kighmu-v2/panel.sh.new && mv /etc/kighmu-v2/panel.sh.new /etc/kighmu-v2/panel.sh && chmod +x /etc/kighmu-v2/panel.sh && echo -e "${GREEN}  ✓ Panneau mis à jour. Reconnectez-vous.${RESET}" && exit 0 || echo -e "${RED}  ✗ Échec mise à jour${RESET}"; pause
     fi
 }
 
