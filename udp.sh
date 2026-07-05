@@ -1,6 +1,6 @@
 #!/bin/bash
 # Kighmu - Tunnels UDP
-# ZIVPN, Hysteria v1/v2, BadVPN, UDP Custom
+# ZIVPN, Hysteria v1, BadVPN, UDP Custom
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -365,49 +365,6 @@ uninstall_udp_custom() {
 }
 
 # ================================================
-# HYSTERIA 2 (Go)
-# ================================================
-install_hysteria2() {
-    echo "${CYAN}━━━ Installation Hysteria 2 ━━━${RESET}"
-    command -v histeria2 &>/dev/null && { warn "Hysteria 2 déjà installé"; pause; return; }
-    apt-get install -y -qq golang-go 2>/dev/null || apt-get install -y -qq golang 2>/dev/null || true
-    if [[ -f "$SCRIPT_DIR/histeria2.go" ]]; then
-        go build -o /usr/local/bin/histeria2 "$SCRIPT_DIR/histeria2.go" 2>/dev/null
-    elif [[ -f "/root/Kighmu/histeria2.go" ]]; then
-        go build -o /usr/local/bin/histeria2 "/root/Kighmu/histeria2.go" 2>/dev/null
-    else
-        cd /tmp; cat > histeria2.go << 'GOEOF'
-package main
-import ("fmt"; "net"; "os"; "os/signal"; "syscall")
-func main() { addr := ":22000"; if len(os.Args) > 1 { addr = ":" + os.Args[1] }
-    udpAddr, _ := net.ResolveUDPAddr("udp", addr); conn, _ := net.ListenUDP("udp", udpAddr)
-    fmt.Println("Hysteria 2 listening on", addr)
-    sig := make(chan os.Signal, 1); signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
-    buf := make([]byte, 4096)
-    go func() { for { n, addr, _ := conn.ReadFromUDP(buf); conn.WriteToUDP(buf[:n], addr) } }()
-    <-sig; conn.Close()
-}
-GOEOF
-        go build -o /usr/local/bin/histeria2 histeria2.go 2>/dev/null
-    fi
-    chmod +x /usr/local/bin/histeria2
-    cat > /etc/systemd/system/histeria2.service << UNIT
-[Unit]; Description=Hysteria 2 UDP Tunnel (Kighmu); After=network.target; Wants=network.target
-[Service]; Type=simple; ExecStart=/usr/local/bin/histeria2; Restart=always; RestartSec=2; LimitNOFILE=1048576; StandardOutput=journal; StandardError=journal
-[Install]; WantedBy=multi-user.target
-UNIT
-    systemctl daemon-reload && systemctl enable --now histeria2 2>/dev/null || true
-    deploy_nft_tunnel histeria2 'table inet histeria2 { chain input { type filter hook input priority 0; policy accept; udp dport 22000 accept; }; chain output { type filter hook output priority 0; policy accept; udp sport 22000 accept; }; }'
-    log "Hysteria 2 actif (port 22000)"; pause
-}
-
-uninstall_hysteria2() {
-    read -rp "Confirmer ? (o/N): " C; [[ "$C" =~ ^[oO]$ ]] || return
-    systemctl disable --now histeria2 2>/dev/null || true; rm -f /etc/systemd/system/histeria2.service
-    rm -f /usr/local/bin/histeria2; remove_nft_tunnel histeria2; log "Hysteria 2 supprimé"; pause
-}
-
-# ================================================
 # MENU UDP
 # ================================================
 main_menu() {
@@ -425,17 +382,14 @@ main_menu() {
         echo "   ${GREEN}[2a]${RESET} Installer     ${GREEN}[2b]${RESET} Créer user   ${GREEN}[2c]${RESET} Supprimer user"
         echo "   ${GREEN}[2d]${RESET} Fix           ${GREEN}[2e]${RESET} Désinstaller"
         echo
-        echo "${WHITE}3. Hysteria 2${RESET}"
+        echo "${WHITE}3. BadVPN${RESET}"
         echo "   ${GREEN}[3a]${RESET} Installer     ${GREEN}[3e]${RESET} Désinstaller"
         echo
-        echo "${WHITE}4. BadVPN${RESET}"
+        echo "${WHITE}4. UDP Custom${RESET}"
         echo "   ${GREEN}[4a]${RESET} Installer     ${GREEN}[4e]${RESET} Désinstaller"
         echo
-        echo "${WHITE}5. UDP Custom${RESET}"
-        echo "   ${GREEN}[5a]${RESET} Installer     ${GREEN}[5e]${RESET} Désinstaller"
-        echo
-        echo "${WHITE}6. Optimisations réseau${RESET}"
-        echo "   ${GREEN}[6a]${RESET} Appliquer BBR + buffers 67Mo + FQ"
+        echo "${WHITE}5. Optimisations réseau${RESET}"
+        echo "   ${GREEN}[5a]${RESET} Appliquer BBR + buffers 67Mo + FQ"
         echo
         echo "  ${RED}[0]${RESET} Retour"
         echo
@@ -446,10 +400,9 @@ main_menu() {
             1d) fix_zivpn ;; 1e) uninstall_zivpn ;;
             2a) install_hysteria ;; 2b) create_hysteria_user ;; 2c) delete_hysteria_user ;;
             2d) fix_hysteria ;; 2e) uninstall_hysteria ;;
-            3a) install_hysteria2 ;; 3e) uninstall_hysteria2 ;;
-            4a) install_badvpn ;; 4e) uninstall_badvpn ;;
-            5a) install_udp_custom ;; 5e) uninstall_udp_custom ;;
-            6a) apply_network_optimizations; pause ;;
+            3a) install_badvpn ;; 3e) uninstall_badvpn ;;
+            4a) install_udp_custom ;; 4e) uninstall_udp_custom ;;
+            5a) apply_network_optimizations; pause ;;
             0) exit 0 ;;
             *) ;;
         esac
