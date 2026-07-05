@@ -301,7 +301,27 @@ menu_ssh_vip() {
             6) clear; echo -e "${CYAN}━━ Check expiry ━━${RESET}"; read -rp "  Username: " u; chage -l "$u" 2>/dev/null | grep -E 'Account expires|Last change' || echo -e "${RED}  ✗ Compte introuvable${RESET}"; pause;;
             7) clear; echo -e "${CYAN}━━ Lock ━━${RESET}"; read -rp "  Username: " u; passwd -l "$u" 2>/dev/null && echo -e "${GREEN}  ✓ Bloqué${RESET}" || echo -e "${RED}  ✗ Échec${RESET}"; pause;;
             8) clear; echo -e "${CYAN}━━ Unlock ━━${RESET}"; read -rp "  Username: " u; passwd -u "$u" 2>/dev/null && echo -e "${GREEN}  ✓ Débloqué${RESET}" || echo -e "${RED}  ✗ Échec${RESET}"; pause;;
-            9) clear; echo -e "${CYAN}━━ Connexions actives ━━${RESET}"; who | awk '{print "  " $1 " depuis " $NF}'; echo; echo -e "${YELLOW}  Ctrl+C pour quitter${RESET}"; sleep 5; pause;;
+            9) clear
+                echo -e "${CLR}${BG}"
+                echo -e "${BG}${CYAN}╔═══$(printf '═%.0s' {1..47})═══╗${RESET}"
+                echo -e "${BG}${CYAN}║${RESET}${TITLE_BG}$(center '📊  MONITEUR CONNEXIONS  📊' 51)${RESET}${BG}${CYAN}║${RESET}"
+                echo -e "${BG}${CYAN}╚═══$(printf '═%.0s' {1..47})═══╝${RESET}"
+                local users=$(who | awk '{print $1}' | sort -u)
+                if [[ -z "$users" ]]; then
+                    echo -e "${BG}  ${YELLOW}Aucun utilisateur connecté${RESET}"
+                else
+                    echo -e "${BG}  ${LAV}Utilisateur       Appareils   IP${RESET}"
+                    echo -e "${BG}  ${DIM}────────────────────────────────────────${RESET}"
+                    while IFS= read -r u; do
+                        local count=$(who | awk -v u="$u" '$1==u' | wc -l)
+                        local ips=$(who | awk -v u="$u" '$1==u{print $NF}' | tr '\n' ' ')
+                        printf "${BG}  ${WHITE}%-16s${RESET} ${MAG}%-3s${RESET}        ${CYAN}%s${RESET}\n" "$u" "$count" "$ips"
+                    done <<< "$users"
+                    echo -e "${BG}  ${DIM}────────────────────────────────────────${RESET}"
+                    local total=$(who | wc -l)
+                    printf "${BG}  ${LAV}TOTAL${RESET}          ${ORANGE}%s connexion(s)${RESET}                    ${BG}║${RESET}\n" "$total"
+                fi
+                echo; echo -e "${YELLOW}  Ctrl+C pour quitter${RESET}"; sleep 8; pause;;
             10) clear; echo -e "${CYAN}━━ Kill connexion ━━${RESET}"; read -rp "  Username: " u; pkill -u "$u" 2>/dev/null && echo -e "${GREEN}  ✓ Connexions de $u fermées${RESET}" || echo -e "${RED}  ✗ Aucune active${RESET}"; pause;;
             11) clear; echo -e "${CYAN}━━ Port SSH ━━${RESET}"; read -rp "  Nouveau port: " p; sed -i "s/^Port .*/Port $p/" /etc/ssh/sshd_config && systemctl restart ssh && echo -e "${GREEN}  ✓ Port → $p${RESET}"; pause;;
             12) clear; echo -e "${CYAN}━━ Banner ━━${RESET}"; read -rp "  Nouveau banner: " b; echo "$b" > /etc/ssh/banner.txt && systemctl restart ssh && echo -e "${GREEN}  ✓ OK${RESET}"; pause;;
