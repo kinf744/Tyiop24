@@ -310,6 +310,27 @@ menu_ssh_vip() {
     done
 }
 
+# ── Affiche le trafic pour un type de tunnel Xray ──
+show_xray_traffic() {
+    local key="$1" label="$2" file="/etc/xray/users.json"
+    clear; echo -e "${CYAN}━━ Trafic $label par utilisateur ━━${RESET}"
+    local users=$(jq -r ".${key} | keys[]" "$file" 2>/dev/null)
+    if [[ -z "$users" ]]; then echo "  Aucun utilisateur"; pause; return; fi
+    echo "  ${LAV}Utilisateur       ↓ Réception    ↑ Émission      Total${RESET}"
+    echo "  ${DIM}──────────────────────────────────────────────────────${RESET}"
+    local total_rx=0 total_tx=0
+    while IFS= read -r u; do
+        [[ -z "$u" ]] && continue
+        local rx=$(nft list counter inet kighmu "${u}_in" 2>/dev/null | grep -oP 'bytes \K\d+' || echo 0)
+        local tx=$(nft list counter inet kighmu "${u}_out" 2>/dev/null | grep -oP 'bytes \K\d+' || echo 0)
+        total_rx=$((total_rx + rx)); total_tx=$((total_tx + tx))
+        printf "  ${WHITE}%-16s${RESET} ${MAG}%8s${RESET}  ${CYAN}%8s${RESET}  ${ORANGE}%8s${RESET}\n" "$u" "$(fmt_bytes $rx)" "$(fmt_bytes $tx)" "$(fmt_bytes $((rx+tx)))"
+    done <<< "$users"
+    echo "  ${DIM}──────────────────────────────────────────────────────${RESET}"
+    printf "  ${LAV}TOTAL${RESET}           ${MAG}%8s${RESET}  ${CYAN}%8s${RESET}  ${ORANGE}%8s${RESET}\n" "$(fmt_bytes $total_rx)" "$(fmt_bytes $total_tx)" "$(fmt_bytes $((total_rx+total_tx)))"
+    pause
+}
+
 menu_vmess() {
     while true; do
         sub_header '📡  MENU VMESS  📡'
@@ -318,6 +339,7 @@ menu_vmess() {
         sub_row 3 "LISTE COMPTES"           4 "RENEW COMPTE"
         sub_row 5 "TRIAL ACCOUNT"           6 "CHECK EXPIRY"
         sub_row 7 "SHOW CONFIG"             8 "DELETE EXPIRED"
+        sub_row 9 "TRAFFIC USAGE"           0 "RETOUR"
         sub_footer
         prompt_sub "VMESS"
         case $SUB in
@@ -329,6 +351,7 @@ menu_vmess() {
             6) clear; echo -e "${CYAN}━━ Check expiry ━━${RESET}"; read -rp "  Username: " u; jq -r ".vmess.\"$u\" // \"Introuvable\"" /etc/xray/users.json 2>/dev/null; pause;;
             7) clear; echo -e "${CYAN}━━ Config VMESS ━━${RESET}"; read -rp "  Username: " u; local d="${DOMAIN:-$IP}"; echo "  server: $d, port: 8443, uuid: $(jq -r ".vmess.\"$u\"" /etc/xray/users.json 2>/dev/null || echo '?')"; pause;;
             8) clear; echo -e "${CYAN}━━ Suppression expirés ━━${RESET}"; local t=$(date +%s); jq --arg t "$t" '.vmess |= with_entries(select(.value | strptime("%Y-%m-%d") | mktime > ($t|tonumber)))' /etc/xray/users.json > /tmp/xu.json && mv /tmp/xu.json /etc/xray/users.json && echo -e "${GREEN}  ✓ Nettoyé${RESET}"; pause;;
+            9) show_xray_traffic "vmess" "VMESS" ;;
             0|q) break ;;
         esac
     done
@@ -342,6 +365,7 @@ menu_vless() {
         sub_row 3 "LISTE COMPTES"           4 "RENEW COMPTE"
         sub_row 5 "TRIAL ACCOUNT"           6 "CHECK EXPIRY"
         sub_row 7 "SHOW CONFIG"             8 "DELETE EXPIRED"
+        sub_row 9 "TRAFFIC USAGE"           0 "RETOUR"
         sub_footer
         prompt_sub "VLESS"
         case $SUB in
@@ -353,6 +377,7 @@ menu_vless() {
             6) clear; echo -e "${CYAN}━━ Check ━━${RESET}"; read -rp "  Username: " u; jq -r ".vless.\"$u\" // \"Introuvable\"" /etc/xray/users.json 2>/dev/null; pause;;
             7) clear; echo -e "${CYAN}━━ Config ━━${RESET}"; read -rp "  Username: " u; echo "  ${DOMAIN:-$IP}:8443, flow: xtls-rprx-vision"; pause;;
             8) clear; echo -e "${CYAN}━━ Suppression expirés ━━${RESET}"; local t=$(date +%s); jq --arg t "$t" '.vless |= with_entries(select(.value | strptime("%Y-%m-%d") | mktime > ($t|tonumber)))' /etc/xray/users.json > /tmp/xu.json && mv /tmp/xu.json /etc/xray/users.json && echo -e "${GREEN}  ✓ Nettoyé${RESET}"; pause;;
+            9) show_xray_traffic "vless" "VLESS" ;;
             0|q) break ;;
         esac
     done
@@ -366,6 +391,7 @@ menu_trojan() {
         sub_row 3 "LISTE COMPTES"           4 "RENEW COMPTE"
         sub_row 5 "TRIAL ACCOUNT"           6 "CHECK EXPIRY"
         sub_row 7 "SHOW CONFIG"             8 "DELETE EXPIRED"
+        sub_row 9 "TRAFFIC USAGE"           0 "RETOUR"
         sub_footer
         prompt_sub "TROJAN"
         case $SUB in
@@ -377,6 +403,7 @@ menu_trojan() {
             6) clear; echo -e "${CYAN}━━ Check ━━${RESET}"; read -rp "  Password: " p; jq -r '.trojan[] | select(.password=="'"$p"'") | .exp' /etc/xray/users.json 2>/dev/null || echo "  Introuvable"; pause;;
             7) clear; echo -e "${CYAN}━━ Config ━━${RESET}"; echo "  ${DOMAIN:-$IP}:8443, security: tls"; pause;;
             8) clear; echo -e "${CYAN}━━ Suppression expirés ━━${RESET}"; local t=$(date +%s); jq --arg t "$t" '.trojan |= map(select(.exp | strptime("%Y-%m-%d") | mktime > ($t|tonumber)))' /etc/xray/users.json > /tmp/xu.json && mv /tmp/xu.json /etc/xray/users.json && echo -e "${GREEN}  ✓ Nettoyé${RESET}"; pause;;
+            9) show_xray_traffic "trojan" "TROJAN" ;;
             0|q) break ;;
         esac
     done
@@ -390,6 +417,7 @@ menu_shadow() {
         sub_row 3 "LISTE COMPTES"           4 "RENEW COMPTE"
         sub_row 5 "TRIAL ACCOUNT"           6 "CHECK EXPIRY"
         sub_row 7 "SHOW CONFIG"             8 "DELETE EXPIRED"
+        sub_row 9 "TRAFFIC USAGE"           0 "RETOUR"
         sub_footer
         prompt_sub "SHADOWSOCKS"
         case $SUB in
@@ -401,6 +429,7 @@ menu_shadow() {
             6) clear; echo -e "${CYAN}━━ Check ━━${RESET}"; read -rp "  Password: " p; jq -r '.shadow[] | select(.password=="'"$p"'") | .exp' /etc/xray/users.json 2>/dev/null || echo "  Introuvable"; pause;;
             7) clear; echo -e "${CYAN}━━ Config ━━${RESET}"; echo "  ${DOMAIN:-$IP}:8443, method: aes-256-gcm"; pause;;
             8) clear; echo -e "${CYAN}━━ Suppression expirés ━━${RESET}"; local t=$(date +%s); jq --arg t "$t" '.shadow |= map(select(.exp | strptime("%Y-%m-%d") | mktime > ($t|tonumber)))' /etc/xray/users.json > /tmp/xu.json && mv /tmp/xu.json /etc/xray/users.json && echo -e "${GREEN}  ✓ Nettoyé${RESET}"; pause;;
+            9) show_xray_traffic "shadow" "SHADOWSOCKS" ;;
             0|q) break ;;
         esac
     done
@@ -454,19 +483,48 @@ menu_hysteria() {
     done
 }
 
+# ── Affiche le trafic V2Ray par utilisateur ──
+show_v2ray_traffic() {
+    local file="/etc/v2ray/users.json"
+    clear; echo -e "${CYAN}━━ Trafic V2RAY DNS par utilisateur ━━${RESET}"
+    local users=$(jq -r '.vless | keys[]' "$file" 2>/dev/null)
+    if [[ -z "$users" ]]; then echo "  Aucun utilisateur"; pause; return; fi
+    echo "  ${LAV}Utilisateur       ↓ Réception    ↑ Émission      Total${RESET}"
+    echo "  ${DIM}──────────────────────────────────────────────────────${RESET}"
+    local total_rx=0 total_tx=0
+    while IFS= read -r u; do
+        [[ -z "$u" ]] && continue
+        local rx=$(nft list counter inet kighmu "${u}_in" 2>/dev/null | grep -oP 'bytes \K\d+' || echo 0)
+        local tx=$(nft list counter inet kighmu "${u}_out" 2>/dev/null | grep -oP 'bytes \K\d+' || echo 0)
+        total_rx=$((total_rx + rx)); total_tx=$((total_tx + tx))
+        printf "  ${WHITE}%-16s${RESET} ${MAG}%8s${RESET}  ${CYAN}%8s${RESET}  ${ORANGE}%8s${RESET}\n" "$u" "$(fmt_bytes $rx)" "$(fmt_bytes $tx)" "$(fmt_bytes $((rx+tx)))"
+    done <<< "$users"
+    echo "  ${DIM}──────────────────────────────────────────────────────${RESET}"
+    printf "  ${LAV}TOTAL${RESET}           ${MAG}%8s${RESET}  ${CYAN}%8s${RESET}  ${ORANGE}%8s${RESET}\n" "$(fmt_bytes $total_rx)" "$(fmt_bytes $total_tx)" "$(fmt_bytes $((total_rx+total_tx)))"
+    pause
+}
+
 menu_v2ray_dns() {
     while true; do
         sub_header '🛰️  MENU V2RAY DNS  🛰️'
         printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
-        sub_row 1 "CREER COMPTE V2RAY"      2 "SUPPRIMER COMPTE"
-        sub_row 3 "LISTE COMPTES"           4 "CHANGE NS"
+        sub_row 1 "CREER COMPTE"            2 "SUPPRIMER COMPTE"
+        sub_row 3 "LISTE COMPTES"           4 "RENEW COMPTE"
+        sub_row 5 "TRIAL ACCOUNT"           6 "CHECK EXPIRY"
+        sub_row 7 "SHOW CONFIG"             8 "CHANGE NS"
+        sub_row 9 "TRAFFIC USAGE"           0 "RETOUR"
         sub_footer
         prompt_sub "V2RAY DNS"
         case $SUB in
             1) clear; echo -e "${CYAN}━━ Création V2Ray ━━${RESET}"; read -rp "  Username: " u; read -rp "  Expire (jours): " e; jq ".vless.\"$u\" = \"$(date -d "+${e}days" +%Y-%m-%d)\"" /etc/v2ray/users.json 2>/dev/null > /tmp/v2u.json && mv /tmp/v2u.json /etc/v2ray/users.json && echo -e "${GREEN}  ✓ Créé${RESET}"; pause;;
-            2) clear; echo -e "${CYAN}━━ Suppression V2Ray ━━${RESET}"; read -rp "  Username: " u; jq "del(.vless.\"$u\")" /etc/v2ray/users.json > /tmp/v2u.json && mv /tmp/v2u.json /etc/v2ray/users.json && echo -e "${GREEN}  ✓ Supprimé${RESET}"; pause;;
+            2) clear; echo -e "${CYAN}━━ Suppression ━━${RESET}"; read -rp "  Username: " u; jq "del(.vless.\"$u\")" /etc/v2ray/users.json > /tmp/v2u.json && mv /tmp/v2u.json /etc/v2ray/users.json && echo -e "${GREEN}  ✓ Supprimé${RESET}"; pause;;
             3) clear; echo -e "${CYAN}━━ Liste V2Ray ━━${RESET}"; jq -r '.vless | to_entries[] | "  " + .key + " → " + .value' /etc/v2ray/users.json 2>/dev/null || echo "  Aucun"; pause;;
-            4) clear; echo -e "${CYAN}━━ Changer NS ━━${RESET}"; read -rp "  Nouveau NS: " n; echo "NV4=$n" > /etc/slowdns/ns.conf && echo -e "${GREEN}  ✓ NS mis à jour${RESET}"; pause;;
+            4) clear; echo -e "${CYAN}━━ Renew ━━${RESET}"; read -rp "  Username: " u; read -rp "  Jours: " e; jq ".vless.\"$u\" = \"$(date -d "+${e}days" +%Y-%m-%d)\"" /etc/v2ray/users.json > /tmp/v2u.json && mv /tmp/v2u.json /etc/v2ray/users.json && echo -e "${GREEN}  ✓ Prolongé${RESET}"; pause;;
+            5) clear; echo -e "${CYAN}━━ Trial 1j ━━${RESET}"; read -rp "  Username: " u; jq ".vless.\"$u\" = \"$(date -d "+1day" +%Y-%m-%d)\"" /etc/v2ray/users.json > /tmp/v2u.json && mv /tmp/v2u.json /etc/v2ray/users.json && echo -e "${GREEN}  ✓ Trial $u créé${RESET}"; pause;;
+            6) clear; echo -e "${CYAN}━━ Check ━━${RESET}"; read -rp "  Username: " u; jq -r ".vless.\"$u\" // \"Introuvable\"" /etc/v2ray/users.json 2>/dev/null; pause;;
+            7) clear; echo -e "${CYAN}━━ Config ━━${RESET}"; read -rp "  Username: " u; echo "  ${DOMAIN:-$IP}:8443 (V2Ray DNS)"; pause;;
+            8) clear; echo -e "${CYAN}━━ Changer NS ━━${RESET}"; read -rp "  Nouveau NS: " n; echo "NV4=$n" > /etc/slowdns/ns.conf && echo -e "${GREEN}  ✓ NS mis à jour${RESET}"; pause;;
+            9) show_v2ray_traffic ;;
             0|q) break ;;
         esac
     done
