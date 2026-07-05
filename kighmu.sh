@@ -156,9 +156,8 @@ draw_panel() {
 
     # ── Cadre QUOTA ──
     local qd="${C_DAY}${BW_DAY_H}${RESET}" qw="${C_WEEK}${BW_WEEK_H}${RESET}" qm="${C_MONTH}${BW_MONTH_H}${RESET}"
-    printf "${BG}╠══════════════════════════════════════════════════════════════════════╣${RESET}\n"
+    printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
     printf "${BG}║${RESET}  ${ORANGE}>>${RESET} ${LAV}DATA QUOTA${RESET}  ${WHITE}Jour:${RESET} %b  ${WHITE}Semaine:${RESET} %b  ${WHITE}Mois:${RESET} %b  ${BG}║${RESET}\n" "$qd" "$qw" "$qm"
-    printf "${BG}╚══════════════════════════════════════════════════════════════════════╝${RESET}\n"
 
     # ── Séparateur + Account Info ──
     printf "${BG}╠══════════════════════════════════════════════════════════════════════╣${RESET}\n"
