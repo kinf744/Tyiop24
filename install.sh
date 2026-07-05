@@ -204,10 +204,8 @@ install_npm_panel() {
 # ── ADMIN ──
 create_admin_user() {
     step_header '👤  Administrateur  👤'
-    local user pass
-    read -rp "  Nom admin [admin]: " user; user=${user:-admin}
-    read -rsp "  Mot de passe [vide = généré]: " pass; echo
-    [[ -z "$pass" ]] && { pass=$(gen_pass 12); echo -e "  ${YELLOW}Mot de passe : ${ORANGE}${pass}${RESET}"; }
+    local user="admin" pass
+    pass=$(gen_pass 12)
     node -e "
     const mysql = require('mysql2/promise');
     const bcrypt = require('bcryptjs');
@@ -218,6 +216,8 @@ create_admin_user() {
         await conn.end();
     })();
     " 2>/dev/null || warn "Admin SQL — vérifie MySQL"
+    echo -e "  ${LAV}Admin : ${CYAN}admin${RESET}"
+    echo -e "  ${LAV}Mot de passe : ${ORANGE}${pass}${RESET}"
     log "Admin '$user' configuré"
 }
 
