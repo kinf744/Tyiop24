@@ -397,6 +397,7 @@ deploy_control_panel() {
         err "Extraction du panneau échouée"; return 1;
     }
     chmod +x /etc/kighmu-v2/panel.sh
+    ln -sf /etc/kighmu-v2/panel.sh /usr/local/bin/menu
     cat > /etc/profile.d/kighmu-panel.sh << 'PROF'
 #!/bin/bash
 if [[ $EUID -eq 0 && -f /etc/kighmu-v2/panel.sh && -t 0 ]]; then
@@ -405,7 +406,7 @@ fi
 PROF
     chmod +x /etc/profile.d/kighmu-panel.sh
     log "Panel déployé (/etc/kighmu-v2/panel.sh)"
-    log "Lancement auto au prochain SSH"
+    log "Tapez 'menu' pour l'ouvrir"
 }
 
 # ── NETTOYAGE ──
