@@ -306,21 +306,26 @@ menu_ssh_vip() {
                 echo -e "${BG}${CYAN}╔═══$(printf '═%.0s' {1..47})═══╗${RESET}"
                 echo -e "${BG}${CYAN}║${RESET}${TITLE_BG}$(center '📊  MONITEUR CONNEXIONS  📊' 51)${RESET}${BG}${CYAN}║${RESET}"
                 echo -e "${BG}${CYAN}╚═══$(printf '═%.0s' {1..47})═══╝${RESET}"
-                local users=$(who | awk '{print $1}' | sort -u)
-                if [[ -z "$users" ]]; then
-                    echo -e "${BG}  ${YELLOW}Aucun utilisateur connecté${RESET}"
-                else
-                    echo -e "${BG}  ${LAV}Utilisateur       Appareils   IP${RESET}"
-                    echo -e "${BG}  ${DIM}────────────────────────────────────────${RESET}"
-                    while IFS= read -r u; do
-                        local count=$(who | awk -v u="$u" '$1==u' | wc -l)
-                        local ips=$(who | awk -v u="$u" '$1==u{print $NF}' | tr '\n' ' ')
-                        printf "${BG}  ${WHITE}%-16s${RESET} ${MAG}%-3s${RESET}        ${CYAN}%s${RESET}\n" "$u" "$count" "$ips"
-                    done <<< "$users"
-                    echo -e "${BG}  ${DIM}────────────────────────────────────────${RESET}"
-                    local total=$(who | wc -l)
-                    printf "${BG}  ${LAV}TOTAL${RESET}          ${ORANGE}%s connexion(s)${RESET}                    ${BG}║${RESET}\n" "$total"
-                fi
+                echo -e "${BG}  ${LAV}Utilisateur       Appareils   Statut${RESET}"
+                echo -e "${BG}  ${DIM}────────────────────────────────────────${RESET}"
+                local total=0
+                while IFS= read -r u; do
+                    local count=$(who | awk -v u="$u" '$1==u' | wc -l)
+                    local exp=$(chage -l "$u" 2>/dev/null | grep "Account expires" | cut -d: -f2)
+                    local status="${GREEN}Actif${RESET}"
+                    if echo "$exp" | grep -qi "never"; then
+                        status="${GREEN}Actif${RESET}"
+                    elif [[ -n "$exp" ]]; then
+                        local exp_s=$(date -d "$exp" +%s 2>/dev/null || echo 0)
+                        local now_s=$(date +%s)
+                        (( exp_s < now_s )) && status="${RED}Expiré${RESET}"
+                    fi
+                    (( count == 0 )) && status="${RED}Inactif${RESET}"
+                    total=$((total + count))
+                    printf "${BG}  ${WHITE}%-16s${RESET} ${MAG}%-3s${RESET}        %b${RESET}\n" "$u" "$count" "$status"
+                done < <(awk -F: '$7~/bash|sh/ && $3>=1000{print $1}' /etc/passwd 2>/dev/null | sort -u)
+                echo -e "${BG}  ${DIM}────────────────────────────────────────${RESET}"
+                printf "${BG}  ${LAV}TOTAL${RESET}          ${ORANGE}%s connexion(s)${RESET}                    ${BG}║${RESET}\n" "$total"
                 echo; echo -e "${YELLOW}  Ctrl+C pour quitter${RESET}"; sleep 8; pause;;
             10) clear; echo -e "${CYAN}━━ Kill connexion ━━${RESET}"; read -rp "  Username: " u; pkill -u "$u" 2>/dev/null && echo -e "${GREEN}  ✓ Connexions de $u fermées${RESET}" || echo -e "${RED}  ✗ Aucune active${RESET}"; pause;;
             11) clear; echo -e "${CYAN}━━ Port SSH ━━${RESET}"; read -rp "  Nouveau port: " p; sed -i "s/^Port .*/Port $p/" /etc/ssh/sshd_config && systemctl restart ssh && echo -e "${GREEN}  ✓ Port → $p${RESET}"; pause;;
