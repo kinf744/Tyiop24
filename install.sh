@@ -137,8 +137,15 @@ install_mysql() {
 deploy_panel_files() {
     step_header '📁  Déploiement Panel  📁'
     mkdir -p "$PANEL_DIR/frontend/admin" "$PANEL_DIR/frontend/reseller" "$KIGHMU_DIR"
-    for f in server.js admin.html reseller.html; do
-        [[ -f "$SCRIPT_DIR/$f" ]] && cp "$SCRIPT_DIR/$f" "$PANEL_DIR/$f" || [[ -f "$KIGHMU_DIR/$f" ]] && cp "$KIGHMU_DIR/$f" "$PANEL_DIR/$f" || true
+    local GH="https://raw.githubusercontent.com/kinf744/Tyiop24/main"
+    for f in server.js admin.html reseller.html package.json; do
+        if [[ -f "$SCRIPT_DIR/$f" ]]; then
+            cp "$SCRIPT_DIR/$f" "$PANEL_DIR/$f"
+        elif [[ -f "$KIGHMU_DIR/$f" ]]; then
+            cp "$KIGHMU_DIR/$f" "$PANEL_DIR/$f"
+        else
+            curl -fsSL "$GH/$f" -o "$PANEL_DIR/$f" 2>/dev/null || true
+        fi
     done
     for f in admin.html reseller.html; do
         if [[ -f "$PANEL_DIR/$f" ]]; then
@@ -147,12 +154,12 @@ deploy_panel_files() {
         fi
     done
     if [[ ! -f "$PANEL_DIR/frontend/index.html" ]]; then
-        cat > "$PANEL_DIR/frontend/index.html" << EOF
+        cat > "$PANEL_DIR/frontend/index.html" << 'EOF'
 <!DOCTYPE html><html><head><meta charset="UTF-8"><title>Kighmu Panel</title>
 <meta http-equiv="refresh" content="0;url=/admin/"></head><body><h1>Kighmu Panel</h1></body></html>
 EOF
     fi
-    log "Fichiers déployés"
+    log "Fichiers déployés (server.js, admin.html, reseller.html, package.json)"
 }
 
 # ── .ENV ──
