@@ -71,6 +71,7 @@ N_TOTAL=$((N_SSH + N_VMESS + N_VLESS + N_TROJAN + N_SHADOW + N_V2RAY + N_HY + N_
 svc() { systemctl is-active --quiet "$1" 2>/dev/null && echo "${GREEN}ON${RESET}" || echo "${RED}OFF${RESET}"; }
 S_SSH=$(svc ssh); S_DROP=$(svc dropbear-custom); S_NGINX=$(svc nginx)
 S_HAPROXY=$(svc haproxy); S_XRAY=$(svc xray); S_V2RAY=$(svc v2ray)
+S_HY=$(svc hysteria); S_ZIVPN=$(svc zivpn)
 
 # ── DRAW ──
 draw_panel() {
@@ -111,6 +112,7 @@ draw_panel() {
 
     # ── Statuts services ──
     printf "${BG}║${RESET}  ${LAV}SSH${RESET}     %s  ${LAV}NGINX${RESET}   %s  ${LAV}HAPROXY${RESET}  %s  ${LAV}WS-epro${RESET} OFF   ${LAV}XRAY${RESET}    %s  ${LAV}DROPBEAR${RESET}  %s ${BG}║${RESET}\n" "$S_SSH" "$S_NGINX" "$S_HAPROXY" "$S_XRAY" "$S_DROP"
+    printf "${BG}║${RESET}  ${LAV}HYSTERIA${RESET} %s  ${LAV}ZIVPN${RESET}    %s  ${LAV}V2RAY${RESET}    %s                                                 ${BG}║${RESET}\n" "$S_HY" "$S_ZIVPN" "$S_V2RAY"
     printf "${BG}╠══════════════════════════════════════════════════════════════════════╣${RESET}\n"
 
     # ── Menu numéroté (3 colonnes) ──
