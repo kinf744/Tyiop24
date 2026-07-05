@@ -5,7 +5,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PANEL_DIR="/opt/kighmu-panel"
-KIGHMU_DIR="/root/Kighmu"
+KIGHMU_DIR="/root/Kighmu-v2"
 DB_NAME="kighmu_panel"
 DB_USER="kighmu_user"
 
@@ -624,10 +624,10 @@ cleanup_scripts() {
         rm -rf "$SCRIPT_DIR"
     fi
 
-    # Supprimer /root/Kighmu legacy
-    if [[ -d /root/Kighmu ]]; then
-        echo "  Suppression de /root/Kighmu/ ..."
-        rm -rf /root/Kighmu
+    # Supprimer le dossier legacy
+    if [[ -d "$KIGHMU_DIR" ]]; then
+        echo "  Suppression de $KIGHMU_DIR ..."
+        rm -rf "$KIGHMU_DIR"
     fi
 
     # Supprimer le fichier d'info utilisateur
