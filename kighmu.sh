@@ -310,24 +310,50 @@ menu_ssh_vip() {
     done
 }
 
-# ── Affiche le trafic pour un type de tunnel Xray ──
+# ── Affiche le trafic Xray via l'API stats ──
+
 show_xray_traffic() {
-    local key="$1" label="$2" file="/etc/xray/users.json"
-    clear; echo -e "${CYAN}━━ Trafic $label par utilisateur ━━${RESET}"
-    local users=$(jq -r ".${key} | keys[]" "$file" 2>/dev/null)
-    if [[ -z "$users" ]]; then echo "  Aucun utilisateur"; pause; return; fi
-    echo "  ${LAV}Utilisateur       ↓ Réception    ↑ Émission      Total${RESET}"
-    echo "  ${DIM}──────────────────────────────────────────────────────${RESET}"
-    local total_rx=0 total_tx=0
+    local key="$1" label="$2"
+    local XRAY_BIN="/usr/local/bin/xray" XRAY_API="127.0.0.1:10085"
+    clear; echo -e "${CYAN}━━ Trafic $label (via API Xray) ━━${RESET}"
+    [[ ! -x "$XRAY_BIN" ]] && { echo -e "${RED}  Xray non installé${RESET}"; pause; return; }
+    local raw; raw=$("$XRAY_BIN" api statsquery --server="$XRAY_API" 2>/dev/null) || { echo -e "${RED}  API Xray indisponible${RESET}"; pause; return; }
+    local users=$(echo "$raw" | jq -r '[.stat[]? | select(.name | test("^user>>>")) | (.name / ">>>")[1]] | unique[]' 2>/dev/null)
+    [[ -z "$users" ]] && { echo -e "  ${YELLOW}Aucune donnée de trafic${RESET}"; pause; return; }
+    echo "  ${LAV}Utilisateur       ↓ Téléchargement  ↑ Envoi          Total${RESET}"
+    echo "  ${DIM}──────────────────────────────────────────────────────────${RESET}"
+    local total_dl=0 total_ul=0
     while IFS= read -r u; do
         [[ -z "$u" ]] && continue
-        local rx=$(nft list counter inet kighmu "${u}_in" 2>/dev/null | grep -oP 'bytes \K\d+' || echo 0)
-        local tx=$(nft list counter inet kighmu "${u}_out" 2>/dev/null | grep -oP 'bytes \K\d+' || echo 0)
-        total_rx=$((total_rx + rx)); total_tx=$((total_tx + tx))
-        printf "  ${WHITE}%-16s${RESET} ${MAG}%8s${RESET}  ${CYAN}%8s${RESET}  ${ORANGE}%8s${RESET}\n" "$u" "$(fmt_bytes $rx)" "$(fmt_bytes $tx)" "$(fmt_bytes $((rx+tx)))"
+        local dl=$(echo "$raw" | jq -r "[.stat[]? | select(.name == \"user>>>${u}>>>traffic>>>downlink\") | .value] | add // 0" 2>/dev/null)
+        local ul=$(echo "$raw" | jq -r "[.stat[]? | select(.name == \"user>>>${u}>>>traffic>>>uplink\") | .value] | add // 0" 2>/dev/null)
+        total_dl=$((total_dl + dl)); total_ul=$((total_ul + ul))
+        printf "  ${WHITE}%-16s${RESET} ${MAG}%10s${RESET}   ${CYAN}%10s${RESET}  ${ORANGE}%10s${RESET}\n" "${u%@*}" "$(fmt_bytes $dl)" "$(fmt_bytes $ul)" "$(fmt_bytes $((dl+ul)))"
     done <<< "$users"
-    echo "  ${DIM}──────────────────────────────────────────────────────${RESET}"
-    printf "  ${LAV}TOTAL${RESET}           ${MAG}%8s${RESET}  ${CYAN}%8s${RESET}  ${ORANGE}%8s${RESET}\n" "$(fmt_bytes $total_rx)" "$(fmt_bytes $total_tx)" "$(fmt_bytes $((total_rx+total_tx)))"
+    echo "  ${DIM}──────────────────────────────────────────────────────────${RESET}"
+    printf "  ${LAV}TOTAL${RESET}           ${MAG}%10s${RESET}   ${CYAN}%10s${RESET}  ${ORANGE}%10s${RESET}\n" "$(fmt_bytes $total_dl)" "$(fmt_bytes $total_ul)" "$(fmt_bytes $((total_dl+total_ul)))"
+    pause
+}
+
+show_v2ray_traffic() {
+    local V2RAY_BIN="/usr/local/bin/v2ray" V2RAY_API="127.0.0.1:10086"
+    clear; echo -e "${CYAN}━━ Trafic V2RAY DNS (via API V2Ray) ━━${RESET}"
+    [[ ! -x "$V2RAY_BIN" ]] && { echo -e "${RED}  V2Ray non installé${RESET}"; pause; return; }
+    local raw; raw=$("$V2RAY_BIN" api stats --server="$V2RAY_API" 2>/dev/null) || { echo -e "${RED}  API V2Ray indisponible${RESET}"; pause; return; }
+    local users=$(echo "$raw" | jq -r '[.stat[]? | select(.name | test("^user>>>")) | (.name / ">>>")[1]] | unique[]' 2>/dev/null)
+    [[ -z "$users" ]] && { echo -e "  ${YELLOW}Aucune donnée de trafic${RESET}"; pause; return; }
+    echo "  ${LAV}Utilisateur       ↓ Téléchargement  ↑ Envoi          Total${RESET}"
+    echo "  ${DIM}──────────────────────────────────────────────────────────${RESET}"
+    local total_dl=0 total_ul=0
+    while IFS= read -r u; do
+        [[ -z "$u" ]] && continue
+        local dl=$(echo "$raw" | jq -r "[.stat[]? | select(.name == \"user>>>${u}>>>traffic>>>downlink\") | .value] | add // 0" 2>/dev/null)
+        local ul=$(echo "$raw" | jq -r "[.stat[]? | select(.name == \"user>>>${u}>>>traffic>>>uplink\") | .value] | add // 0" 2>/dev/null)
+        total_dl=$((total_dl + dl)); total_ul=$((total_ul + ul))
+        printf "  ${WHITE}%-16s${RESET} ${MAG}%10s${RESET}   ${CYAN}%10s${RESET}  ${ORANGE}%10s${RESET}\n" "${u%@*}" "$(fmt_bytes $dl)" "$(fmt_bytes $ul)" "$(fmt_bytes $((dl+ul)))"
+    done <<< "$users"
+    echo "  ${DIM}──────────────────────────────────────────────────────────${RESET}"
+    printf "  ${LAV}TOTAL${RESET}           ${MAG}%10s${RESET}   ${CYAN}%10s${RESET}  ${ORANGE}%10s${RESET}\n" "$(fmt_bytes $total_dl)" "$(fmt_bytes $total_ul)" "$(fmt_bytes $((total_dl+total_ul)))"
     pause
 }
 
@@ -481,27 +507,6 @@ menu_hysteria() {
             0|q) break ;;
         esac
     done
-}
-
-# ── Affiche le trafic V2Ray par utilisateur ──
-show_v2ray_traffic() {
-    local file="/etc/v2ray/users.json"
-    clear; echo -e "${CYAN}━━ Trafic V2RAY DNS par utilisateur ━━${RESET}"
-    local users=$(jq -r '.vless | keys[]' "$file" 2>/dev/null)
-    if [[ -z "$users" ]]; then echo "  Aucun utilisateur"; pause; return; fi
-    echo "  ${LAV}Utilisateur       ↓ Réception    ↑ Émission      Total${RESET}"
-    echo "  ${DIM}──────────────────────────────────────────────────────${RESET}"
-    local total_rx=0 total_tx=0
-    while IFS= read -r u; do
-        [[ -z "$u" ]] && continue
-        local rx=$(nft list counter inet kighmu "${u}_in" 2>/dev/null | grep -oP 'bytes \K\d+' || echo 0)
-        local tx=$(nft list counter inet kighmu "${u}_out" 2>/dev/null | grep -oP 'bytes \K\d+' || echo 0)
-        total_rx=$((total_rx + rx)); total_tx=$((total_tx + tx))
-        printf "  ${WHITE}%-16s${RESET} ${MAG}%8s${RESET}  ${CYAN}%8s${RESET}  ${ORANGE}%8s${RESET}\n" "$u" "$(fmt_bytes $rx)" "$(fmt_bytes $tx)" "$(fmt_bytes $((rx+tx)))"
-    done <<< "$users"
-    echo "  ${DIM}──────────────────────────────────────────────────────${RESET}"
-    printf "  ${LAV}TOTAL${RESET}           ${MAG}%8s${RESET}  ${CYAN}%8s${RESET}  ${ORANGE}%8s${RESET}\n" "$(fmt_bytes $total_rx)" "$(fmt_bytes $total_tx)" "$(fmt_bytes $((total_rx+total_tx)))"
-    pause
 }
 
 menu_v2ray_dns() {
