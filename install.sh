@@ -1119,19 +1119,44 @@ menu_port() {
 }
 
 menu_panel_web() {
-    sub_header '🌍  PANEL WEB  🌍'
-    printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
-    sub_row 1 "STATUT PANEL"               2 "RESTART PANEL"
-    sub_row 3 "CHANGE PORT PANEL"          4 "VIEW LOGS"
-    sub_footer
-    prompt_sub "PANEL WEB"
-    case $SUB in
-        1) clear; echo -e "${CYAN}━━ Statut Panel ━━${RESET}"; pm2 show kighmu-panel 2>/dev/null | grep -E 'status|uptime' || echo -e "${RED}  Panel non trouvé${RESET}"; pause;;
-        2) clear; pm2 restart kighmu-panel 2>/dev/null && echo -e "${GREEN}  ✓ Panel redémarré${RESET}" || echo -e "${RED}  ✗ Échec${RESET}"; pause;;
-        3) clear; echo -e "${CYAN}━━ Port Panel ━━${RESET}"; read -rp "  Nouveau port: " p; sed -i "s/:[0-9]*\//:$p\//" /etc/nginx/sites-enabled/kighmu 2>/dev/null && nginx -t && systemctl restart nginx && echo -e "${GREEN}  ✓ Port panel → $p${RESET}"; pause;;
-        4) clear; tail -30 /var/log/kighmu*.log 2>/dev/null || echo "  Aucun log"; pause;;
-        0|q) ;;
-    esac
+    while true; do
+        sub_header '🌍  PANEL WEB  🌍'
+        printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
+        sub_row 1 "STATUT PANEL"             2 "DEMARRER PANEL"
+        sub_row 3 "ARRETER PANEL"            4 "RESTART PANEL"
+        sub_row 5 "CHANGE PORT PANEL"        6 "VIEW LOGS"
+        sub_row 7 "LOGS TEMPS REEL"          8 "CHANGER DOMAINE"
+        sub_row 9 "CERT SSL PANEL"          10 "BACKUP PANEL"
+        sub_row 11 "RESTORE PANEL"          12 "RESET PASSWORD"
+        sub_row 13 "STATUT MYSQL"           14 "MAINTENANCE"
+        sub_row 15 "UPDATE PANEL"            0 "RETOUR"
+        sub_footer
+        prompt_sub "PANEL WEB"
+        case $SUB in
+            1) clear; echo -e "${CYAN}━━ Statut Panel ━━${RESET}"; pm2 show kighmu-panel 2>/dev/null | grep -E 'status|uptime|restarts|cpu|memory' || echo -e "${RED}  Panel non trouvé${RESET}"; pause;;
+            2) clear; pm2 start kighmu-panel 2>/dev/null && echo -e "${GREEN}  ✓ Panel démarré${RESET}" || echo -e "${YELLOW}  Déjà en cours${RESET}"; pause;;
+            3) clear; pm2 stop kighmu-panel 2>/dev/null && echo -e "${GREEN}  ✓ Panel arrêté${RESET}" || echo -e "${RED}  ✗ Déjà arrêté${RESET}"; pause;;
+            4) clear; pm2 restart kighmu-panel 2>/dev/null && echo -e "${GREEN}  ✓ Panel redémarré${RESET}" || echo -e "${RED}  ✗ Échec${RESET}"; pause;;
+            5) clear; echo -e "${CYAN}━━ Port Panel ━━${RESET}"; read -rp "  Nouveau port: " p; sed -i "s/listen [0-9]*;/listen $p;/" /etc/nginx/sites-enabled/kighmu 2>/dev/null && nginx -t && systemctl restart nginx && echo -e "${GREEN}  ✓ Port → $p${RESET}" || echo -e "${RED}  ✗ Échec${RESET}"; pause;;
+            6) clear; tail -30 /var/log/kighmu*.log 2>/dev/null || echo "  Aucun log"; pause;;
+            7) clear; echo -e "${YELLOW}  Ctrl+C pour quitter${RESET}"; tail -f /var/log/kighmu*.log 2>/dev/null || echo "  Aucun log";;
+            8) clear; echo -e "${CYAN}━━ Domaine Panel ━━${RESET}"; read -rp "  Nouveau domaine: " d; echo "$d" > /etc/kighmu/domain.txt 2>/dev/null; echo -e "${GREEN}  ✓ Domaine: $d${RESET}"; pause;;
+            9) clear; echo -e "${CYAN}━━ Cert SSL Panel ━━${RESET}"; read -rp "  Domaine à certifier: " d; DEBIAN_FRONTEND=noninteractive apt-get install -y -qq certbot python3-certbot-nginx 2>/dev/null; certbot --nginx -d "$d" --non-interactive --agree-tos -m admin@"$d" 2>/dev/null && echo -e "${GREEN}  ✓ SSL OK${RESET}" || echo -e "${RED}  ✗ Échec${RESET}"; pause;;
+            10) clear; echo -e "${CYAN}━━ Backup ━━${RESET}"; local f="/root/kighmu-panel-backup-$(date +%Y%m%d-%H%M).tar.gz"; tar -czf "$f" /opt/kighmu-panel /etc/nginx/sites-available/kighmu /etc/kighmu/domain.txt 2>/dev/null && echo -e "${GREEN}  ✓ $f${RESET}" || echo -e "${RED}  ✗ Échec${RESET}"; pause;;
+            11) clear; echo -e "${CYAN}━━ Restore ━━${RESET}"; ls -1 /root/kighmu-panel-backup-*.tar.gz 2>/dev/null || echo "  Aucun backup"; read -rp "  Fichier: " f; [[ -f "$f" ]] && tar -xzf "$f" -C / && pm2 restart kighmu-panel 2>/dev/null && echo -e "${GREEN}  ✓ Restauré${RESET}" || echo -e "${RED}  ✗ Fichier invalide${RESET}"; pause;;
+            12) clear; echo -e "${CYAN}━━ Reset Password Admin ━━${RESET}"; local p=$(openssl rand -base64 20 | tr -d '=/+' | head -c 12); node -e "const mysql=require('mysql2/promise');const bcrypt=require('bcryptjs');(async()=>{const c=await mysql.createConnection({host:'127.0.0.1',user:'kighmu_user',password:'$(grep DB_PASSWORD /opt/kighmu-panel/.env 2>/dev/null | cut -d= -f2)',database:'kighmu_panel'});const h=await bcrypt.hash('$p',12);await c.execute('UPDATE admins SET password=? WHERE username=?',[h,'admin']);await c.end();})();" 2>/dev/null && echo -e "  ${LAV}Nouveau mot de passe: ${ORANGE}${p}${RESET}" || echo -e "${RED}  ✗ Échec${RESET}"; pause;;
+            13) clear; echo -e "${CYAN}━━ MySQL ━━${RESET}"; mysqladmin ping 2>/dev/null && echo -e "  ${GREEN}✓ MySQL actif${RESET}" || echo -e "  ${RED}✗ MySQL inactif${RESET}"; mysql -e "SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME='kighmu_panel';" 2>/dev/null | grep -q kighmu_panel && echo -e "  ${GREEN}✓ Base kighmu_panel OK${RESET}" || echo -e "  ${RED}✗ Base absente${RESET}"; pause;;
+            14) clear; echo -e "${CYAN}━━ Maintenance ━━${RESET}"; if [[ -f /opt/kighmu-panel/.maintenance ]]; then rm -f /opt/kighmu-panel/.maintenance && echo -e "${GREEN}  ✓ Mode maintenance OFF${RESET}"; else touch /opt/kighmu-panel/.maintenance && echo -e "${GREEN}  ✓ Mode maintenance ON (503)${RESET}"; fi; nginx -t && systemctl restart nginx 2>/dev/null; pause;;
+            15) clear; echo -e "${CYAN}━━ Update Panel ━━${RESET}"
+                local u="https://raw.githubusercontent.com/kinf744/Tyiop24/main"
+                curl -fsSL "$u/server.js" -o /opt/kighmu-panel/server.js.new 2>/dev/null && mv /opt/kighmu-panel/server.js.new /opt/kighmu-panel/server.js && echo -e "${GREEN}  ✓ server.js mis à jour${RESET}" || echo -e "${RED}  ✗ Échec server.js${RESET}"
+                for f in admin.html reseller.html; do
+                    curl -fsSL "$u/$f" -o "/opt/kighmu-panel/frontend/${f%.html}/index.html.new" 2>/dev/null && mv "/opt/kighmu-panel/frontend/${f%.html}/index.html.new" "/opt/kighmu-panel/frontend/${f%.html}/index.html" && echo -e "${GREEN}  ✓ $f mis à jour${RESET}" || echo -e "${RED}  ✗ Échec $f${RESET}"
+                done
+                pm2 restart kighmu-panel 2>/dev/null && echo -e "${GREEN}  ✓ Panel redémarré${RESET}"; pause;;
+            0|q) break ;;
+        esac
+    done
 }
 
 menu_dell_all_exp() {
