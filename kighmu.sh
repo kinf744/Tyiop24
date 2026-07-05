@@ -110,24 +110,24 @@ draw_panel() {
 
     # ── Menu numéroté (3 colonnes) ──
     local items=(
-        "[01] INSTALL UDP"    "[02] INSTALL XRAY"    "[03] INSTALL V2RAY"
-        "[04] INSTALL SSH"    "[05] HYSTERIA"        "[06] ZIVPN"
-        "[07] BADVPN"         "[08] DROPBEAR"        "[09] SLOWDNS"
-        "[10] SSL/TLS"        "[11] SSH WS"          "[12] SOCKS WS"
-        "[13] ADD UDP"        "[14] ADD XRAY"        "[15] ADD SSH"
-        "[16] DEL UDP"        "[17] DEL XRAY"        "[18] DEL SSH"
-        "[19] SERVICE FIX"    "[20] CHANGE DOMAIN"   "[21] BANDWIDTH"
-        "[22] BACKUP"         "[23] RESTART"         "[24] REBOOT"
+        "[01] MENU SSH VIP"    "[02] MENU VMESS"      "[03] MENU VLESS"
+        "[04] MENU TROJAN"     "[05] MENU SHADOW"     "[06] MENU ZIVPN"
+        "[07] MENU HYSTERIA"   "[08] MENU V2RAY DNS"  "[09] AUTO REBOOT"
+        "[10] MENU PORT"       "[11] PANEL WEB"       "[12] DELL ALL EXP"
+        "[13] CLEAR LOG"       "[14] STOP ALL SERV"   "[15] BCKP/RSTR"
+        "[16] REBOOT VPS"      "[17] RESTART VPS"     "[18] SET DOMAIN"
+        "[19] CERT SSL"        "[20] QUOTA USAGE"     "[21] CLEAR CACHE"
+        "[22] CEK BANDWIDTH"   "[23] UP SCRIPT"       "[24] MENU BOT VIP"
     )
     for ((i=0; i<24; i+=3)); do
-        printf "${BG}║${RESET}  ${ORANGE}%-18s${RESET} ${ORANGE}%-18s${RESET} ${ORANGE}%-18s${RESET} ${BG}║${RESET}\n" \
+        printf "${BG}║${RESET}  ${ORANGE}%-20s${RESET} ${ORANGE}%-20s${RESET} ${ORANGE}%-20s${RESET} ${BG}║${RESET}\n" \
             "${items[$i]}" "${items[$((i+1))]:-}" "${items[$((i+2))]:-}"
     done
 
     printf "${BG}╠══════════════════════════════════════════════════════════════════════╣${RESET}\n"
 
     # ── Options spéciales ──
-    printf "${BG}║${RESET}  ${ORANGE}[25]${RESET} ${WHITE}LOCK ACCOUNT${RESET}       ${ORANGE}[26]${RESET} ${WHITE}UNLOCK ACCOUNT${RESET}       ${BG}║${RESET}\n"
+    printf "${BG}║${RESET}  ${ORANGE}[25]${RESET} ${WHITE}CHANGE BANNER SSH${RESET}   ${ORANGE}[26]${RESET} ${WHITE}LOG CREATE USER${RESET}     ${BG}║${RESET}\n"
     printf "${BG}╠══════════════════════════════════════════════════════════════════════╣${RESET}\n"
 
     # ── Footer ──
