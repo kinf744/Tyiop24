@@ -301,9 +301,9 @@ setup_traffic_collection() {
     mkdir -p /etc/kighmu /var/log/kighmu /var/lib/kighmu/ssh-counters
 
     # Enregistrer NS
-    mkdir -p /etc/slowdns
-    echo "NS4=${NS4:-ns4.kingom.ggff.net}" > /etc/slowdns/ns.conf
-    echo "NV4=${NV4:-nv4.kingom.ggff.net}" >> /etc/slowdns/ns.conf
+    mkdir -p /etc/slowdns/nv4
+    echo "${NS4:-ns4.kingom.ggff.net}" > /etc/slowdns/ns.conf
+    echo "${NV4:-nv4.kingom.ggff.net}" > /etc/slowdns/nv4/ns.conf
 
     REPORT_SECRET=${REPORT_SECRET:-$(grep '^REPORT_SECRET=' "$PANEL_DIR/.env" 2>/dev/null | cut -d= -f2 || echo "")}
 
@@ -636,8 +636,8 @@ C_MONTH=$(quota_color $BW_MONTH)
 # ── Données ──
 IP=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "127.0.0.1")
 DOMAIN=$(cat /etc/kighmu/domain.txt 2>/dev/null || cat /etc/xray/domain 2>/dev/null || echo "$IP")
-NS4=$(grep NS4 /etc/slowdns/ns.conf 2>/dev/null | cut -d= -f2 || echo "ns4.domain")
-NV4=$(grep NV4 /etc/slowdns/ns.conf 2>/dev/null | cut -d= -f2 || echo "nv4.domain")
+NS4=$(cat /etc/slowdns/ns.conf 2>/dev/null | head -1 || grep NS4 /etc/slowdns/ns.conf 2>/dev/null | cut -d= -f2 || echo "ns4.domain")
+NV4=$(cat /etc/slowdns/nv4/ns.conf 2>/dev/null || grep NV4 /etc/slowdns/ns.conf 2>/dev/null | cut -d= -f2 || echo "nv4.domain")
 RAM=$(free -m | awk '/Mem:/ {print $3"MB/"$2"MB"}')
 RAM_PCT=$(free -m | awk '/Mem:/ {printf "%d", $3/$2*100}')
 CPU_CORES=$(nproc 2>/dev/null || echo "?")
@@ -718,7 +718,7 @@ draw_panel() {
         "[13] CLEAR LOG"       "[14] STOP ALL SERV"   "[15] BCKP/RSTR"
         "[16] REBOOT VPS"      "[17] RESTART VPS"     "[18] SET DOMAIN"
         "[19] CERT SSL"        "[20] QUOTA USAGE"     "[21] CLEAR CACHE"
-        "[22] CEK BANDWIDTH"   "[23] UP SCRIPT"       "[24] MENU BOT VIP"
+        "[22] CEK BANDWIDTH"   "[23] DÉSINSTALLE"     "[24] MENU BOT VIP"
     )
     for ((i=0; i<24; i+=3)); do
         printf "${BG}║${RESET}  ${ORANGE}%-20s${RESET} ${ORANGE}%-20s${RESET} ${ORANGE}%-20s${RESET} ${BG}║${RESET}\n" \
@@ -788,7 +788,7 @@ menu_ssh_vip() {
             1) clear; echo -e "${CYAN}━━ Création compte SSH ━━${RESET}"; read -rp "  Username: " u; read -rp "  Password: " p; read -rp "  Expire (jours): " e; if useradd -e "$(date -d "+${e}days" +%Y-%m-%d)" -s /bin/bash "$u" 2>/dev/null && echo "$u:$p" | chpasswd; then
                 local D="${DOMAIN:-$IP}" E="$(date -d "+${e}days" +%Y-%m-%d)"
                 local KEY=$(cat /etc/slowdns/server.pub 2>/dev/null || echo "non-dispo")
-                local NS=$(grep NS4 /etc/slowdns/ns.conf 2>/dev/null | cut -d= -f2 || echo "ns4.kingom.ggff.net")
+                local NS=$(cat /etc/slowdns/ns.conf 2>/dev/null || echo "ns4.kingom.ggff.net")
                 clear
                 echo -e "${BG}╔═══════════════════════════════════════════════════════════════════════╗${RESET}"
                 echo -e "${BG}║${RESET}  ${ORANGE}✨  NOUVEAU UTILISATEUR CRE  ✨${RESET}                             ${BG}║${RESET}"
@@ -1069,7 +1069,21 @@ menu_v2ray_dns() {
             5) clear; echo -e "${CYAN}━━ Trial 1j ━━${RESET}"; read -rp "  Username: " u; jq ".vless.\"$u\" = \"$(date -d "+1day" +%Y-%m-%d)\"" /etc/v2ray/users.json > /tmp/v2u.json && mv /tmp/v2u.json /etc/v2ray/users.json && echo -e "${GREEN}  ✓ Trial $u créé${RESET}"; pause;;
             6) clear; echo -e "${CYAN}━━ Check ━━${RESET}"; read -rp "  Username: " u; jq -r ".vless.\"$u\" // \"Introuvable\"" /etc/v2ray/users.json 2>/dev/null; pause;;
             7) clear; echo -e "${CYAN}━━ Config ━━${RESET}"; read -rp "  Username: " u; echo "  ${DOMAIN:-$IP}:8443 (V2Ray DNS)"; pause;;
-            8) clear; echo -e "${CYAN}━━ Changer NS ━━${RESET}"; read -rp "  Nouveau NS: " n; echo "NV4=$n" > /etc/slowdns/ns.conf && echo -e "${GREEN}  ✓ NS mis à jour${RESET}"; pause;;
+            8) clear; echo -e "${CYAN}━━ Changer NS V2Ray ━━${RESET}"
+                echo -e "  ${LAV}Actuel:${RESET} ${MAG}$NV4${RESET}"
+                read -rp "  Nouveau NV4: " n
+                if [[ -n "$n" && "$n" != "0" ]]; then
+                    mkdir -p /etc/slowdns/nv4
+                    echo "$n" > /etc/slowdns/nv4/ns.conf
+                    cat > /usr/local/bin/slowdns-nv4-start.sh << NV4EOF
+#!/bin/bash
+NV4=\$(cat /etc/slowdns/nv4/ns.conf)
+exec /usr/local/bin/dnstt-server -udp 0.0.0.0:5354 -privkey-file /etc/slowdns/server.key \$NV4 127.0.0.1:5401
+NV4EOF
+                    chmod +x /usr/local/bin/slowdns-nv4-start.sh
+                    systemctl restart slowdns-nv4 2>/dev/null || true
+                    echo -e "${GREEN}  ✓ NV4 mis à jour: ${MAG}$n${RESET} (service redémarré)${RESET}"
+                fi; pause;;
             9) show_v2ray_traffic ;;
             0|q) break ;;
         esac
@@ -1159,49 +1173,107 @@ menu_panel_web() {
 }
 
 menu_dell_all_exp() {
-    sub_header '🗑️  DELETE ALL EXPIRED  🗑️'
-    printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
-    printf "${BG}║${RESET}  ${RED}⚠ Supprimer tous les comptes expirés ?${RESET}            ${BG}║${RESET}\n"
-    sub_footer
-    prompt_sub "CONFIRMER (o/N)"
-    if [[ "$SUB" =~ ^[oO]$ ]]; then
-        clear
-        local today=$(date +%s) count=0
-        for u in $(awk -F: '$7~/bash|sh/ && $3>=1000 {print $1}' /etc/passwd); do
-            local exp=$(chage -l "$u" 2>/dev/null | grep "Account expires" | awk -F: '{print $2}' | xargs)
-            [[ "$exp" != "never" && "$exp" != "" ]] && [[ $(date -d "$exp" +%s 2>/dev/null) -lt $today ]] && userdel -r "$u" 2>/dev/null && count=$((count+1))
-        done
-        echo -e "${GREEN}  ✓ $count comptes expirés supprimés${RESET}"
-        pause
-    fi
+    while true; do
+        sub_header '🗑️  DELETE ALL EXPIRED  🗑️'
+        printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
+        sub_row 1 "COMPTES SSH EXPIRES"        2 "COMPTES XRAY EXPIRES"
+        sub_row 3 "TOUS COMPTES EXPIRES"       4 "LISTE COMPTES EXPIRES"
+        sub_footer
+        prompt_sub "DELL EXP"
+        case $SUB in
+            1) clear; echo -e "${CYAN}━━ SSH expirés ━━${RESET}"
+                local today=$(date +%s) c=0
+                for u in $(awk -F: '$7~/bash|sh/ && $3>=1000 {print $1}' /etc/passwd); do
+                    local exp=$(chage -l "$u" 2>/dev/null | grep "Account expires" | awk -F: '{print $2}' | xargs)
+                    [[ "$exp" != "never" && "$exp" != "" ]] && [[ $(date -d "$exp" +%s 2>/dev/null) -lt $today ]] && userdel -r "$u" 2>/dev/null && c=$((c+1))
+                done; echo -e "${GREEN}  ✓ $c comptes SSH supprimés${RESET}"; pause;;
+            2) clear; echo -e "${CYAN}━━ Xray/V2Ray expirés ━━${RESET}"
+                local c=0
+                for f in /etc/xray/users.json /etc/v2ray/users.json; do
+                    [[ ! -f "$f" ]] && continue
+                    local t=$(basename $(dirname "$f"))
+                    for proto in vmess vless trojan shadow; do
+                        jq -r ".$proto // {} | to_entries[] | select(.value < \"$(date +%Y-%m-%d)\") | .key" "$f" 2>/dev/null | while read -r u; do
+                            jq "del(.$proto.\"$u\")" "$f" > /tmp/u.json && mv /tmp/u.json "$f" && c=$((c+1))
+                        done
+                    done
+                done; echo -e "${GREEN}  ✓ Comptes Xray/V2Ray expirés supprimés${RESET}"; pause;;
+            3) clear; echo -e "${RED}⚠ Supprimer TOUS les comptes expirés ?${RESET}"
+                read -rp "  Confirmer (o/N): " c3; [[ "$c3" =~ ^[oO]$ ]] || break
+                local today=$(date +%s) c=0
+                for u in $(awk -F: '$7~/bash|sh/ && $3>=1000 {print $1}' /etc/passwd); do
+                    local exp=$(chage -l "$u" 2>/dev/null | grep "Account expires" | awk -F: '{print $2}' | xargs)
+                    [[ "$exp" != "never" && "$exp" != "" ]] && [[ $(date -d "$exp" +%s 2>/dev/null) -lt $today ]] && userdel -r "$u" 2>/dev/null && c=$((c+1))
+                done
+                for f in /etc/xray/users.json /etc/v2ray/users.json; do
+                    [[ ! -f "$f" ]] && continue
+                    for proto in vmess vless trojan shadow; do
+                        jq -r ".$proto // {} | to_entries[] | select(.value < \"$(date +%Y-%m-%d)\") | .key" "$f" 2>/dev/null | while read -r u; do
+                            jq "del(.$proto.\"$u\")" "$f" > /tmp/u.json && mv /tmp/u.json "$f"
+                        done
+                    done
+                done; echo -e "${GREEN}  ✓ Tous les comptes expirés supprimés${RESET}"; pause;;
+            4) clear; echo -e "${CYAN}━━ Liste comptes expirés ━━${RESET}"
+                local today=$(date +%s) f=0
+                echo -e "  ${LAV}SSH expirés:${RESET}"
+                for u in $(awk -F: '$7~/bash|sh/ && $3>=1000 {print $1}' /etc/passwd); do
+                    local exp=$(chage -l "$u" 2>/dev/null | grep "Account expires" | awk -F: '{print $2}' | xargs)
+                    [[ "$exp" != "never" && "$exp" != "" ]] && [[ $(date -d "$exp" +%s 2>/dev/null) -lt $today ]] && echo -e "  ${RED}$u (expiré le $exp)${RESET}" && f=1
+                done; [[ $f -eq 0 ]] && echo -e "  ${GREEN}Aucun${RESET}"
+                for f2 in /etc/xray/users.json /etc/v2ray/users.json; do
+                    [[ ! -f "$f2" ]] && continue
+                    for proto in vmess vless trojan shadow; do
+                        jq -r ".$proto // {} | to_entries[] | select(.value < \"$(date +%Y-%m-%d)\") | \"\(.key) (\(.value))\"" "$f2" 2>/dev/null | while read -r u; do echo -e "  ${RED}$proto: $u${RESET}"; done
+                    done
+                done; pause;;
+            0|q) break ;;
+        esac
+    done
 }
 
 menu_clear_log() {
-    sub_header '🧹  CLEAR LOG  🧹'
-    printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
-    printf "${BG}║${RESET}  ${RED}⚠ Effacer tous les logs système ?${RESET}                   ${BG}║${RESET}\n"
-    sub_footer
-    prompt_sub "CONFIRMER (o/N)"
-    if [[ "$SUB" =~ ^[oO]$ ]]; then
-        > /var/log/syslog > /var/log/auth.log > /var/log/kighmu*.log 2>/dev/null || true
-        journalctl --rotate --vacuum-time=1s 2>/dev/null || true
-        echo -e "${GREEN}  ✓ Logs nettoyés${RESET}"
-        pause
-    fi
+    while true; do
+        sub_header '🧹  CLEAR LOG  🧹'
+        printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
+        sub_row 1 "LOGS SYSTEME (syslog/auth)" 2 "LOGS NGINX"
+        sub_row 3 "LOGS XRAY/V2RAY"            4 "LOGS PANEL + CRÉATION"
+        sub_row 5 "JOURNALCTL VACUUM"          6 "TOUT NETTOYER"
+        sub_footer
+        prompt_sub "CLEAR LOG"
+        case $SUB in
+            1) clear; > /var/log/syslog 2>/dev/null; > /var/log/auth.log 2>/dev/null; > /var/log/kighmu*.log 2>/dev/null || true; echo -e "${GREEN}  ✓ Logs système nettoyés${RESET}"; pause;;
+            2) clear; > /var/log/nginx/access.log 2>/dev/null; > /var/log/nginx/error.log 2>/dev/null || true; echo -e "${GREEN}  ✓ Logs Nginx nettoyés${RESET}"; pause;;
+            3) clear; > /var/log/xray/access.log 2>/dev/null; > /var/log/xray/error.log 2>/dev/null; > /var/log/v2ray/access.log 2>/dev/null; > /var/log/v2ray/error.log 2>/dev/null || true; echo -e "${GREEN}  ✓ Logs Xray/V2Ray nettoyés${RESET}"; pause;;
+            4) clear; > /var/log/kighmu-user.log 2>/dev/null; > /var/log/kighmu-xray-user.log 2>/dev/null || true; echo -e "${GREEN}  ✓ Logs panel nettoyés${RESET}"; pause;;
+            5) clear; journalctl --rotate --vacuum-time=1s 2>/dev/null && echo -e "${GREEN}  ✓ Journalctl compressé${RESET}" || echo -e "${YELLOW}  Pas de journalctl${RESET}"; pause;;
+            6) clear; > /var/log/syslog > /var/log/auth.log 2>/dev/null; > /var/log/kighmu*.log 2>/dev/null; > /var/log/nginx/access.log > /var/log/nginx/error.log 2>/dev/null; > /var/log/xray/access.log > /var/log/xray/error.log 2>/dev/null; > /var/log/v2ray/access.log > /var/log/v2ray/error.log 2>/dev/null; > /var/log/kighmu-user.log > /var/log/kighmu-xray-user.log 2>/dev/null; journalctl --rotate --vacuum-time=1s 2>/dev/null || true; echo -e "${GREEN}  ✓ Tous les logs nettoyés${RESET}"; pause;;
+            0|q) break ;;
+        esac
+    done
 }
 
 menu_stop_all_serv() {
-    sub_header '⛔  STOP ALL SERVICES  ⛔'
-    printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
-    printf "${BG}║${RESET}  ${RED}⚠ Arrêter tous les services ?${RESET}                       ${BG}║${RESET}\n"
-    sub_footer
-    prompt_sub "CONFIRMER (o/N)"
-    if [[ "$SUB" =~ ^[oO]$ ]]; then
-        for s in nginx xray v2ray dropbear-custom hysteria zivpn slowdns ssh; do systemctl stop "$s" 2>/dev/null || true; done
-        pm2 stop kighmu-panel 2>/dev/null || true
-        echo -e "${GREEN}  ✓ Tous les services arrêtés${RESET}"
-        pause
-    fi
+    while true; do
+        sub_header '⛔  STOP ALL SERVICES  ⛔'
+        printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
+        sub_row 1 "ARRETER TOUS"               2 "ARRETER SSH/DROPBEAR"
+        sub_row 3 "ARRETER XRAY"               4 "ARRETER V2RAY"
+        sub_row 5 "ARRETER NGINX"              6 "ARRETER HYSTERIA/ZIVPN"
+        sub_row 7 "ARRETER SLOWDNS"            8 "ARRETER PANEL WEB"
+        sub_footer
+        prompt_sub "STOP SERV"
+        case $SUB in
+            1) for s in nginx xray v2ray dropbear-custom hysteria zivpn slowdns ssh; do systemctl stop "$s" 2>/dev/null || true; done; pm2 stop kighmu-panel 2>/dev/null || true; echo -e "${GREEN}  ✓ Tous arrêtés${RESET}"; pause;;
+            2) systemctl stop ssh dropbear-custom 2>/dev/null || true; echo -e "${GREEN}  ✓ SSH/Dropbear arrêtés${RESET}"; pause;;
+            3) systemctl stop xray 2>/dev/null && echo -e "${GREEN}  ✓ Xray arrêté${RESET}" || echo -e "${YELLOW}  Déjà arrêté${RESET}"; pause;;
+            4) systemctl stop v2ray 2>/dev/null && echo -e "${GREEN}  ✓ V2Ray arrêté${RESET}" || echo -e "${YELLOW}  Déjà arrêté${RESET}"; pause;;
+            5) systemctl stop nginx 2>/dev/null && echo -e "${GREEN}  ✓ Nginx arrêté${RESET}" || echo -e "${YELLOW}  Déjà arrêté${RESET}"; pause;;
+            6) systemctl stop hysteria zivpn 2>/dev/null || true; echo -e "${GREEN}  ✓ Hysteria/ZIVPN arrêtés${RESET}"; pause;;
+            7) systemctl stop slowdns 2>/dev/null && echo -e "${GREEN}  ✓ SlowDNS arrêté${RESET}" || echo -e "${YELLOW}  Déjà arrêté${RESET}"; pause;;
+            8) pm2 stop kighmu-panel 2>/dev/null && echo -e "${GREEN}  ✓ Panel Web arrêté${RESET}" || echo -e "${YELLOW}  Déjà arrêté${RESET}"; pause;;
+            0|q) break ;;
+        esac
+    done
 }
 
 menu_bckp_rstr() {
@@ -1222,85 +1294,324 @@ menu_bckp_rstr() {
     done
 }
 
-menu_reboot() { sub_header '🔄  REBOOT VPS  🔄'; printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"; printf "${BG}║${RESET}  ${RED}⚠ Redémarrer le VPS maintenant ?${RESET}                         ${BG}║${RESET}\n"; sub_footer; prompt_sub "CONFIRMER (o/N)"; [[ "$SUB" =~ ^[oO]$ ]] && echo -e "${YELLOW}  Redémarrage...${RESET}" && reboot || echo "  Annulé"; }
-menu_restart() { sub_header '🔄  RESTART SERVICES  🔄'; printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"; printf "${BG}║${RESET}  ${GREEN}Redémarrage de tous les services...${RESET}                        ${BG}║${RESET}\n"; sub_footer; prompt_sub "CONFIRMER (o/N)"; if [[ "$SUB" =~ ^[oO]$ ]]; then for s in nginx xray v2ray dropbear-custom hysteria zivpn slowdns ssh; do systemctl restart "$s" 2>/dev/null || true; done; pm2 restart kighmu-panel 2>/dev/null || true; echo -e "${GREEN}  ✓ Services redémarrés${RESET}"; fi; pause; }
+menu_reboot() {
+    while true; do
+        sub_header '🔄  REBOOT VPS  🔄'
+        printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
+        sub_row 1 "REBOOT MAINTENANT"          2 "REBOOT DANS X MINUTES"
+        sub_row 3 "ANNULER REBOOT PROGRAMME"   0 ""
+        sub_footer
+        prompt_sub "REBOOT"
+        case $SUB in
+            1) echo -e "${YELLOW}  Redémarrage dans 5 secondes...${RESET}"; sleep 5; reboot;;
+            2) read -rp "  Minutes avant reboot: " m
+                [[ "$m" =~ ^[0-9]+$ ]] && { shutdown -r +$m "Reboot programmé dans $m minutes"; echo -e "${GREEN}  ✓ Reboot dans $m min${RESET}"; }; pause;;
+            3) shutdown -c 2>/dev/null && echo -e "${GREEN}  ✓ Reboot annulé${RESET}" || echo -e "${YELLOW}  Aucun reboot programmé${RESET}"; pause;;
+            0|q) break ;;
+        esac
+    done
+}
+menu_restart() {
+    while true; do
+        sub_header '🔄  RESTART VPS  🔄'
+        printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
+        sub_row 1 "RESTART ALL SERVICES"     2 "RESTART SSH"
+        sub_row 3 "RESTART DROPBEAR"         4 "RESTART NGINX"
+        sub_row 5 "RESTART XRAY"             6 "RESTART V2RAY"
+        sub_row 7 "RESTART HYSTERIA"         8 "RESTART ZIVPN"
+        sub_row 9 "RESTART SLOWDNS"          0 ""
+        sub_footer
+        prompt_sub "RESTART VPS"
+        case $SUB in
+            1) clear; echo -e "${YELLOW}  Redémarrage de tous les services...${RESET}"
+                for s in nginx xray v2ray dropbear-custom hysteria zivpn slowdns ssh; do systemctl restart "$s" 2>/dev/null || true; done
+                echo -e "${GREEN}  ✓ Tous les services redémarrés${RESET}"; pause;;
+            2) systemctl restart ssh 2>/dev/null && echo -e "${GREEN}  ✓ SSH restarted${RESET}" || echo -e "${RED}  ✗ Échec${RESET}"; pause;;
+            3) systemctl restart dropbear-custom 2>/dev/null && echo -e "${GREEN}  ✓ Dropbear restarted${RESET}" || echo -e "${RED}  ✗ Échec${RESET}"; pause;;
+            4) systemctl restart nginx 2>/dev/null && echo -e "${GREEN}  ✓ Nginx restarted${RESET}" || echo -e "${RED}  ✗ Échec${RESET}"; pause;;
+            5) systemctl restart xray 2>/dev/null && echo -e "${GREEN}  ✓ Xray restarted${RESET}" || echo -e "${RED}  ✗ Échec${RESET}"; pause;;
+            6) systemctl restart v2ray 2>/dev/null && echo -e "${GREEN}  ✓ V2Ray restarted${RESET}" || echo -e "${RED}  ✗ Échec${RESET}"; pause;;
+            7) systemctl restart hysteria 2>/dev/null && echo -e "${GREEN}  ✓ Hysteria restarted${RESET}" || echo -e "${RED}  ✗ Échec${RESET}"; pause;;
+            8) systemctl restart zivpn 2>/dev/null && echo -e "${GREEN}  ✓ ZIVPN restarted${RESET}" || echo -e "${RED}  ✗ Échec${RESET}"; pause;;
+            9) systemctl restart slowdns 2>/dev/null && echo -e "${GREEN}  ✓ SlowDNS restarted${RESET}" || echo -e "${RED}  ✗ Échec${RESET}"; pause;;
+            0|q) break ;;
+        esac
+    done
+}
 
 menu_set_domain() {
-    sub_header '🌐  SET DOMAIN  🌐'
-    printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
-    printf "${BG}║${RESET}  ${LAV}Domaine actuel:${RESET} ${ORANGE}%-36s${RESET} ${BG}║${RESET}\n" "$DOMAIN"
-    printf "${BG}║${RESET}                                                                    ${BG}║${RESET}\n"
-    printf "${BG}║${RESET}  Ceci modifie le domaine pour Xray, V2Ray, SlowDNS${RESET}           ${BG}║${RESET}\n"
-    sub_footer
-    prompt_sub "NOUVEAU DOMAINE (ou 0)"
-    [[ "$SUB" != "0" && -n "$SUB" ]] && { echo "$SUB" > /etc/kighmu/domain.txt; echo "$SUB" > /etc/xray/domain 2>/dev/null || true; echo -e "${GREEN}  ✓ Domaine mis à jour: $SUB${RESET}"; pause; }
+    while true; do
+        sub_header '🌐  SET DOMAIN  🌐'
+        printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
+        printf "${BG}║${RESET}  ${LAV}Domaine:${RESET}    ${ORANGE}%-40s${RESET} ${BG}║${RESET}\n" "$DOMAIN"
+        printf "${BG}║${RESET}  ${LAV}NS SlowDNS:${RESET} ${MAG}%-40s${RESET} ${BG}║${RESET}\n" "$NS4"
+        printf "${BG}║${RESET}  ${LAV}NS V2Ray:${RESET}   ${MAG}%-40s${RESET} ${BG}║${RESET}\n" "$NV4"
+        printf "${BG}╠══════════════════════════════════════════════════════════════════════╣${RESET}\n"
+        sub_row 1 "CHANGER DOMAINE PRINCIPAL" 2 "CHANGER NS SLOWDNS (NS4)"
+        sub_row 3 "CHANGER NS V2RAY (NV4)"    0 ""
+        sub_footer
+        prompt_sub "SET DOMAIN"
+        case $SUB in
+            1) clear; read -rp "  Nouveau domaine: " d
+                if [[ -n "$d" && "$d" != "0" ]]; then
+                    echo "$d" > /etc/kighmu/domain.txt
+                    echo "$d" > /etc/xray/domain 2>/dev/null || true
+                    echo "$d" > /etc/v2ray/domain.txt 2>/dev/null || true
+                    echo -e "${GREEN}  ✓ Domaine mis à jour: ${ORANGE}$d${RESET}"
+                    echo -e "  ${YELLOW}⚠ Régénérez le cert SSL si besoin (menu 19)${RESET}"
+                fi; pause;;
+            2) clear; echo -e "${CYAN}━━ NS SlowDNS (pour SSH/Dropbear) ━━${RESET}"
+                echo -e "  ${LAV}Actuel:${RESET} ${MAG}$NS4${RESET}"
+                read -rp "  Nouveau NS4: " ns4
+                if [[ -n "$ns4" && "$ns4" != "0" ]]; then
+                    echo "$ns4" > /etc/slowdns/ns.conf
+                    # Régénère le script de démarrage slowdns-ns4
+                    cat > /usr/local/bin/slowdns-ns4-start.sh << NS4EOF
+#!/bin/bash
+NS=\$(cat /etc/slowdns/ns.conf)
+exec /usr/local/bin/dnstt-server -udp 0.0.0.0:5353 -privkey-file /etc/slowdns/server.key \$NS 127.0.0.1:109
+NS4EOF
+                    chmod +x /usr/local/bin/slowdns-ns4-start.sh
+                    systemctl restart slowdns-ns4 2>/dev/null || true
+                    echo -e "${GREEN}  ✓ NS SlowDNS mis à jour: ${MAG}$ns4${RESET} (service redémarré)${RESET}"
+                fi; pause;;
+            3) clear; echo -e "${CYAN}━━ NS V2Ray DNS (NV4) ━━${RESET}"
+                echo -e "  ${LAV}Actuel:${RESET} ${MAG}$NV4${RESET}"
+                read -rp "  Nouveau NV4: " nv4
+                if [[ -n "$nv4" && "$nv4" != "0" ]]; then
+                    mkdir -p /etc/slowdns/nv4
+                    echo "$nv4" > /etc/slowdns/nv4/ns.conf
+                    # Régénère le script de démarrage slowdns-nv4
+                    cat > /usr/local/bin/slowdns-nv4-start.sh << NV4EOF
+#!/bin/bash
+NV4=\$(cat /etc/slowdns/nv4/ns.conf)
+exec /usr/local/bin/dnstt-server -udp 0.0.0.0:5354 -privkey-file /etc/slowdns/server.key \$NV4 127.0.0.1:5401
+NV4EOF
+                    chmod +x /usr/local/bin/slowdns-nv4-start.sh
+                    systemctl restart slowdns-nv4 2>/dev/null || true
+                    echo -e "${GREEN}  ✓ NS V2Ray mis à jour: ${MAG}$nv4${RESET} (service redémarré)${RESET}"
+                fi; pause;;
+            0|q) break ;;
+        esac
+    done
 }
 
 menu_cert_ssl() {
-    sub_header '🔐  CERT SSL  🔐'
-    printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
-    printf "${BG}║${RESET}  [1] ${WHITE}Générer certificat Let's Encrypt${RESET}                   ${BG}║${RESET}\n"
-    printf "${BG}║${RESET}  [2] ${WHITE}Voir statut certificat${RESET}                              ${BG}║${RESET}\n"
-    sub_footer
-    prompt_sub "CERT SSL"
-    case $SUB in
-        1) clear; read -rp "  Domaine: " d; apt-get install -y certbot python3-certbot-nginx 2>/dev/null && certbot --nginx -d "$d" --non-interactive --agree-tos -m admin@"$d" && echo -e "${GREEN}  ✓ Certificat généré${RESET}" || echo -e "${RED}  ✗ Échec${RESET}"; pause;;
-        2) clear; certbot certificates 2>/dev/null || echo "  Aucun certificat"; pause;;
-        0|q) ;;
-    esac
+    while true; do
+        sub_header '🔐  CERT SSL  🔐'
+        printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
+        sub_row 1 "GENERER CERT LETSENCRYPT"  2 "LISTE CERTIFICATS"
+        sub_row 3 "DETAILS CERTIFICAT"        4 "RENEW CERTIFICAT"
+        sub_row 5 "AUTO-RENEW (CRON)"         6 "SUPPRIMER CERT"
+        sub_footer
+        prompt_sub "CERT SSL"
+        case $SUB in
+            1) clear; echo -e "${CYAN}━━ Génération Let's Encrypt ━━${RESET}"; read -rp "  Domaine: " d
+                DEBIAN_FRONTEND=noninteractive apt-get install -y -qq certbot python3-certbot-nginx 2>/dev/null
+                certbot --nginx -d "$d" --non-interactive --agree-tos -m admin@"$d" 2>/dev/null && echo -e "${GREEN}  ✓ Certificat généré pour $d${RESET}" || echo -e "${RED}  ✗ Échec (vérifiez que le domaine pointe vers ce VPS)${RESET}"; pause;;
+            2) clear; certbot certificates 2>/dev/null | head -30 || echo -e "  ${YELLOW}Aucun certificat${RESET}"; pause;;
+            3) clear; echo -e "${CYAN}━━ Détails ━━${RESET}"; read -rp "  Domaine: " d; certbot certificates -d "$d" 2>/dev/null || echo -e "  ${RED}Certificat introuvable pour $d${RESET}"; pause;;
+            4) clear; echo -e "${CYAN}━━ Renew ━━${RESET}"; read -rp "  Domaine: " d; certbot renew --cert-name "$d" --non-interactive 2>/dev/null && echo -e "${GREEN}  ✓ Certificat renouvelé${RESET}" || echo -e "${RED}  ✗ Échec ou pas encore expiré${RESET}"; pause;;
+            5) clear; echo -e "${CYAN}━━ Auto-Renew ━━${RESET}"
+                if crontab -l 2>/dev/null | grep -q certbot; then
+                    echo -e "  ${GREEN}Auto-renew déjà actif${RESET}"
+                    read -rp "  Désactiver ? (o/N): " c; [[ "$c" =~ ^[oO]$ ]] && crontab -l 2>/dev/null | grep -v certbot | crontab - && echo -e "  ${GREEN}Auto-renew désactivé${RESET}"
+                else
+                    echo -e "  ${YELLOW}Auto-renew inactif${RESET}"
+                    read -rp "  Activer (3h chaque lundi) ? (o/N): " c; [[ "$c" =~ ^[oO]$ ]] && (crontab -l 2>/dev/null; echo "0 3 * * 1 certbot renew --non-interactive --quiet && systemctl restart nginx") | crontab - && echo -e "  ${GREEN}Auto-renew activé (lundi 3h)${RESET}"
+                fi; pause;;
+            6) clear; echo -e "${CYAN}━━ Suppression ━━${RESET}"; read -rp "  Domaine: " d; certbot delete --cert-name "$d" --non-interactive 2>/dev/null && echo -e "${GREEN}  ✓ Certificat supprimé${RESET}" || echo -e "${RED}  ✗ Introuvable${RESET}"; pause;;
+            0|q) break ;;
+        esac
+    done
 }
 
 menu_quota_usage() {
-    sub_header '📊  QUOTA USAGE  📊'
-    printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
-    printf "${BG}║${RESET}  ${LAV}Jour:${RESET}     %b                                           ${BG}║${RESET}\n" "$qd"
-    printf "${BG}║${RESET}  ${LAV}Semaine:${RESET}  %b                                           ${BG}║${RESET}\n" "$qw"
-    printf "${BG}║${RESET}  ${LAV}Mois:${RESET}     %b                                           ${BG}║${RESET}\n" "$qm"
-    sub_footer
-    prompt_sub "QUOTA"
-    pause
+    local BW_DIR="/etc/kighmu/bandwidth"
+    mkdir -p "$BW_DIR"
+    local TODAY=$(date +%Y-%m-%d)
+    local CUR_BYTES=0
+    local iface=$(ip route 2>/dev/null | awk '/default/{print $5; exit}')
+    [[ -n "$iface" ]] && {
+        local rx=$(awk -v i="$iface" '$1 ~ i":"{print $2}' /proc/net/dev 2>/dev/null || echo 0)
+        local tx=$(awk -v i="$iface" '$1 ~ i":"{print $10}' /proc/net/dev 2>/dev/null || echo 0)
+        CUR_BYTES=$((rx + tx))
+    }
+    # Calcul quotas
+    local BW_DAY=0 BW_WEEK=0 BW_MONTH=0
+    local prev=$CUR_BYTES
+    [[ -f "$BW_DIR/$TODAY.prev" ]] && prev=$(<"$BW_DIR/$TODAY.prev")
+    BW_DAY=$((CUR_BYTES - prev)); ((BW_DAY < 0)) && BW_DAY=$CUR_BYTES
+    for d in $(seq 0 6 | xargs -I{} date -d "{} days ago" +%Y-%m-%d 2>/dev/null); do
+        [[ -f "$BW_DIR/$d" ]] && BW_WEEK=$((BW_WEEK + $(<"$BW_DIR/$d")))
+    done
+    for d in $(seq 0 30 | xargs -I{} date -d "{} days ago" +%Y-%m-%d 2>/dev/null); do
+        [[ -f "$BW_DIR/$d" ]] && BW_MONTH=$((BW_MONTH + $(<"$BW_DIR/$d")))
+    done
+    local qd=$(fmt_bytes $BW_DAY) qw=$(fmt_bytes $BW_WEEK) qm=$(fmt_bytes $BW_MONTH)
+    while true; do
+        sub_header '📊  QUOTA USAGE  📊'
+        printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
+        printf "${BG}║${RESET}  ${LAV}Jour:${RESET}     %-44s${BG}║${RESET}\n" "$qd"
+        printf "${BG}║${RESET}  ${LAV}Semaine:${RESET}  %-44s${BG}║${RESET}\n" "$qw"
+        printf "${BG}║${RESET}  ${LAV}Mois:${RESET}     %-44s${BG}║${RESET}\n" "$qm"
+        printf "${BG}╠══════════════════════════════════════════════════════════════════════╣${RESET}\n"
+        sub_row 1 "QUOTA PAR UTILISATEUR"     2 "RESET QUOTA"
+        sub_row 3 "TOP CONSOMMATEURS"         0 ""
+        sub_footer
+        prompt_sub "QUOTA"
+        case $SUB in
+            1) clear; echo -e "${CYAN}━━ Quota par utilisateur ━━${RESET}"
+                echo -e "  ${LAV}Utilisateur       Téléchargé    Envoyé        Total${RESET}"
+                echo -e "  ${DIM}──────────────────────────────────────────────────────${RESET}"
+                local total_u=0 total_d=0
+                while IFS= read -r l; do
+                    local u=$(echo "$l" | awk -F: '{print $1}')
+                    local uid=$(id -u "$u" 2>/dev/null) || continue
+                    local tag="ssh_${uid}"
+                    local ul=$(nft list counter inet kighmu "${tag}_out" 2>/dev/null | grep -oP 'bytes \K\d+' || echo 0)
+                    local dl=$(nft list counter inet kighmu "${tag}_in" 2>/dev/null | grep -oP 'bytes \K\d+' || echo 0)
+                    total_u=$((total_u + ul)); total_d=$((total_d + dl))
+                    printf "  ${WHITE}%-16s${RESET} ${MAG}%10s${RESET}  ${CYAN}%10s${RESET}  ${ORANGE}%10s${RESET}\n" "$u" "$(fmt_bytes $dl)" "$(fmt_bytes $ul)" "$(fmt_bytes $((dl+ul)))"
+                done < <(awk -F: '$7~/bash|sh/ && $3>=1000{print $1}' /etc/passwd 2>/dev/null)
+                echo -e "  ${DIM}──────────────────────────────────────────────────────${RESET}"
+                printf "  ${LAV}TOTAL${RESET}           ${MAG}%10s${RESET}  ${CYAN}%10s${RESET}  ${ORANGE}%10s${RESET}\n" "$(fmt_bytes $total_d)" "$(fmt_bytes $total_u)" "$(fmt_bytes $((total_d+total_u)))"; pause;;
+            2) clear; echo -e "${RED}⚠ Réinitialiser tous les quotas ?${RESET}"; read -rp "  Confirmer (o/N): " c
+                [[ "$c" =~ ^[oO]$ ]] && {
+                    for i in $(seq 0 30); do local d=$(date -d "$i days ago" +%Y-%m-%d 2>/dev/null); rm -f "$BW_DIR/$d" "$BW_DIR/$d.prev" 2>/dev/null; done
+                    echo -e "${GREEN}  ✓ Quotas réinitialisés${RESET}"
+                }; pause;;
+            3) clear; echo -e "${CYAN}━━ Top consommateurs ━━${RESET}"
+                local tmpf=$(mktemp)
+                while IFS= read -r l; do
+                    local u=$(echo "$l" | awk -F: '{print $1}')
+                    local uid=$(id -u "$u" 2>/dev/null) || continue
+                    local tag="ssh_${uid}"
+                    local ul=$(nft list counter inet kighmu "${tag}_out" 2>/dev/null | grep -oP 'bytes \K\d+' || echo 0)
+                    local dl=$(nft list counter inet kighmu "${tag}_in" 2>/dev/null | grep -oP 'bytes \K\d+' || echo 0)
+                    echo "$((dl+ul))|$u|$dl|$ul" >> "$tmpf"
+                done < <(awk -F: '$7~/bash|sh/ && $3>=1000{print $1}' /etc/passwd 2>/dev/null)
+                    sort -rn "$tmpf" | head -10 | while IFS='|' read -r total u dl ul; do
+                    printf "  ${WHITE}%-16s${RESET} ${ORANGE}%10s${RESET}  ${MAG}↓%s${RESET}  ${CYAN}↑%s${RESET}\n" "$u" "$(fmt_bytes $total)" "$(fmt_bytes $dl)" "$(fmt_bytes $ul)"
+                done; rm -f "$tmpf"; pause;;
+            0|q) break ;;
+        esac
+    done
 }
 
 menu_clear_cache() {
-    sub_header '🧹  CLEAR CACHE  🧹'
-    printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
-    printf "${BG}║${RESET}  ${RED}⚠ Nettoyer le cache système ?${RESET}                          ${BG}║${RESET}\n"
-    sub_footer
-    prompt_sub "CONFIRMER (o/N)"
-    if [[ "$SUB" =~ ^[oO]$ ]]; then
-        sync && echo 3 > /proc/sys/vm/drop_caches 2>/dev/null || true
-        apt-get clean 2>/dev/null || true
-        rm -rf /tmp/* 2>/dev/null || true
-        echo -e "${GREEN}  ✓ Cache nettoyé${RESET}"
-        pause
-    fi
+    while true; do
+        sub_header '🧹  CLEAR CACHE  🧹'
+        printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
+        sub_row 1 "CACHE SYSTEME (drop_caches)" 2 "CACHE APT"
+        sub_row 3 "FICHIERS TEMPORAIRES"        4 "TOUT NETTOYER"
+        sub_footer
+        prompt_sub "CLEAR CACHE"
+        case $SUB in
+            1) sync && echo 3 > /proc/sys/vm/drop_caches 2>/dev/null && echo -e "${GREEN}  ✓ Cache système vidé${RESET}" || echo -e "${RED}  ✗ Échec${RESET}"; pause;;
+            2) apt-get clean 2>/dev/null && echo -e "${GREEN}  ✓ Cache APT nettoyé${RESET}" || echo -e "${YELLOW}  Déjà propre${RESET}"; pause;;
+            3) rm -rf /tmp/* /var/tmp/* 2>/dev/null || true; echo -e "${GREEN}  ✓ Fichiers temporaires supprimés${RESET}"; pause;;
+            4) sync && echo 3 > /proc/sys/vm/drop_caches 2>/dev/null; apt-get clean 2>/dev/null; rm -rf /tmp/* /var/tmp/* 2>/dev/null || true; echo -e "${GREEN}  ✓ Tout nettoyé${RESET}"; pause;;
+            0|q) break ;;
+        esac
+    done
 }
 
 menu_cek_bandwidth() {
-    sub_header '📈  CEK BANDWIDTH  📈'
-    local iface=$(ip route 2>/dev/null | awk '/default/{print $5; exit}')
-    local rx=$(awk -v i="$iface" '$1 ~ i":"{print $2}' /proc/net/dev 2>/dev/null || echo 0)
-    local tx=$(awk -v i="$iface" '$1 ~ i":"{print $10}' /proc/net/dev 2>/dev/null || echo 0)
-    printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
-    printf "${BG}║${RESET}  ${LAV}Interface:${RESET} ${WHITE}%-48s${RESET} ${BG}║${RESET}\n" "$iface"
-    printf "${BG}║${RESET}  ${LAV}Réception:${RESET}  ${MAG}$(fmt_bytes $rx)${RESET}                                           ${BG}║${RESET}\n"
-    printf "${BG}║${RESET}  ${LAV}Émission:${RESET}    ${MAG}$(fmt_bytes $tx)${RESET}                                           ${BG}║${RESET}\n"
-    printf "${BG}║${RESET}  ${LAV}Total:${RESET}       ${ORANGE}$(fmt_bytes $((rx+tx)))${RESET}                                           ${BG}║${RESET}\n"
-    sub_footer
-    prompt_sub "CEK BW"
-    pause
+    while true; do
+        sub_header '📈  CEK BANDWIDTH  📈'
+        local iface=$(ip route 2>/dev/null | awk '/default/{print $5; exit}')
+        local rx=$(awk -v i="$iface" '$1 ~ i":"{print $2}' /proc/net/dev 2>/dev/null || echo 0)
+        local tx=$(awk -v i="$iface" '$1 ~ i":"{print $10}' /proc/net/dev 2>/dev/null || echo 0)
+        printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
+        printf "${BG}║${RESET}  ${LAV}Interface:${RESET} ${WHITE}%-48s${RESET} ${BG}║${RESET}\n" "$iface"
+        printf "${BG}║${RESET}  ${LAV}Réception:${RESET}  ${MAG}$(fmt_bytes $rx)${RESET}                                           ${BG}║${RESET}\n"
+        printf "${BG}║${RESET}  ${LAV}Émission:${RESET}    ${MAG}$(fmt_bytes $tx)${RESET}                                           ${BG}║${RESET}\n"
+        printf "${BG}║${RESET}  ${LAV}Total:${RESET}       ${ORANGE}$(fmt_bytes $((rx+tx)))${RESET}                                           ${BG}║${RESET}\n"
+        printf "${BG}╠══════════════════════════════════════════════════════════════════════╣${RESET}\n"
+        sub_row 1 "RAFRAICHIR"                  2 "HISTORIQUE (JOURS)"
+        sub_row 3 "TOP INTERFACES"              0 ""
+        sub_footer
+        prompt_sub "CEK BW"
+        case $SUB in
+            1) clear; continue ;;
+            2) clear; echo -e "${CYAN}━━ Historique bande passante ━━${RESET}"
+                local BW_DIR="/etc/kighmu/bandwidth"
+                if [[ -d "$BW_DIR" ]]; then
+                    for d in $(ls -1 "$BW_DIR" 2>/dev/null | grep -v '.prev$' | tail -14); do
+                        local val=$(cat "$BW_DIR/$d" 2>/dev/null || echo 0)
+                        echo -e "  ${WHITE}$d${RESET} → ${ORANGE}$(fmt_bytes $val)${RESET}"
+                    done
+                else
+                    echo -e "  ${YELLOW}Aucun historique${RESET}"
+                fi; pause;;
+            3) clear; echo -e "${CYAN}━━ Traffic par interface ━━${RESET}"
+                echo -e "  ${LAV}Interface       Réception      Émission       Total${RESET}"
+                echo -e "  ${DIM}──────────────────────────────────────────────────────────${RESET}"
+                for ifc in $(ls /sys/class/net 2>/dev/null); do
+                    local r=$(cat /sys/class/net/$ifc/statistics/rx_bytes 2>/dev/null || echo 0)
+                    local t=$(cat /sys/class/net/$ifc/statistics/tx_bytes 2>/dev/null || echo 0)
+                    printf "  ${WHITE}%-15s${RESET} ${MAG}%10s${RESET}   ${CYAN}%10s${RESET}   ${ORANGE}%10s${RESET}\n" "$ifc" "$(fmt_bytes $r)" "$(fmt_bytes $t)" "$(fmt_bytes $((r+t)))"
+                done; pause;;
+            0|q) break ;;
+        esac
+    done
 }
 
-menu_up_script() {
-    sub_header '🔄  UPDATE SCRIPT  🔄'
+menu_desinstalle() {
+    sub_header '🗑️  DÉSINSTALLATION  🗑️'
     printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
-    printf "${BG}║${RESET}  ${YELLOW}Mise à jour du panneau de contrôle...${RESET}                   ${BG}║${RESET}\n"
-    printf "${BG}║${RESET}  Source: github.com/kinf744/Tyiop24${RESET}                             ${BG}║${RESET}\n"
+    printf "${BG}║${RESET}  ${RED}╔════════════════════════════════════════════════════════════════╗${RESET}  ${BG}║${RESET}\n"
+    printf "${BG}║${RESET}  ${RED}║${RESET}  ${WHITE}⚠  ATTENTION : Action irréversible  ⚠${RESET}                 ${RED}║${RESET}  ${BG}║${RESET}\n"
+    printf "${BG}║${RESET}  ${RED}║${RESET}  Supprime TOUS les services, configs, utilisateurs,${RESET}     ${RED}║${RESET}  ${BG}║${RESET}\n"
+    printf "${BG}║${RESET}  ${RED}║${RESET}  logs et paquets. VPS remis à l'état d'origine.${RESET}        ${RED}║${RESET}  ${BG}║${RESET}\n"
+    printf "${BG}║${RESET}  ${RED}╚════════════════════════════════════════════════════════════════╝${RESET}  ${BG}║${RESET}\n"
+    printf "${BG}╠══════════════════════════════════════════════════════════════════════╣${RESET}\n"
+    sub_row 1 "DÉSINSTALLATION COMPLÈTE"      0 ""
     sub_footer
-    prompt_sub "CONFIRMER (o/N)"
-    if [[ "$SUB" =~ ^[oO]$ ]]; then
-        curl -fsSL "https://raw.githubusercontent.com/kinf744/Tyiop24/main/kighmu.sh" -o /etc/kighmu-v2/panel.sh.new && mv /etc/kighmu-v2/panel.sh.new /etc/kighmu-v2/panel.sh && chmod +x /etc/kighmu-v2/panel.sh && echo -e "${GREEN}  ✓ Panneau mis à jour. Reconnectez-vous.${RESET}" && exit 0 || echo -e "${RED}  ✗ Échec mise à jour${RESET}"; pause
-    fi
+    prompt_sub "DÉSINSTALLER"
+    case $SUB in
+        1) clear
+            echo -e "${BG}${RED}╔══════════════════════════════════════════════════════════════════════╗${RESET}"
+            echo -e "${BG}${RED}║${RESET}  ${WHITE}⚠  DÉSINSTALLATION COMPLÈTE  ⚠${RESET}                           ${BG}${RED}║${RESET}"
+            echo -e "${BG}${RED}║${RESET}  ${YELLOW}Pour confirmer, tapez le mot: ${WHITE}PURGE${RESET}                    ${BG}${RED}║${RESET}"
+            echo -e "${BG}${RED}╚══════════════════════════════════════════════════════════════════════╝${RESET}"
+            read -rp "  » " CONFIRM
+            if [[ "$CONFIRM" == "PURGE" ]]; then
+                echo -e "${YELLOW}  Arrêt de tous les services...${RESET}"
+                for s in xray v2ray nginx haproxy hysteria zivpn dropbear-custom sshws ssl_tls proxy--ws ws-dropbear ws-stunnel socks_python_ws socks_python udp-custom slowdns-ns4 slowdns-nv4 dnsdist bot2 mysql kighmu-bandwidth; do
+                    systemctl disable --now "$s" 2>/dev/null || true
+                done
+                pm2 stop kighmu-panel 2>/dev/null || true; pm2 delete kighmu-panel 2>/dev/null || true; pm2 unstartup 2>/dev/null || true
+                echo -e "${YELLOW}  Suppression des binaires...${RESET}"
+                rm -f /usr/local/bin/xray /usr/local/bin/v2ray /usr/local/bin/dnstt-server /usr/local/bin/hysteria /usr/local/bin/zivpn /usr/local/bin/badvpn-udpgw /usr/local/bin/udp-custom /root/Kighmu/bot2
+                echo -e "${YELLOW}  Suppression des services systemd...${RESET}"
+                rm -f /etc/systemd/system/{xray,v2ray,nginx,haproxy,hysteria,zivpn,dropbear-custom,sshws,ssl_tls,proxy--ws,ws-dropbear,ws-stunnel,socks_python_ws,socks_python,udp-custom,badvpn@,slowdns-ns4,slowdns-nv4,bot2,kighmu-bandwidth}.service 2>/dev/null || true
+                rm -f /etc/systemd/system/nftables-tunnel@*.service /etc/systemd/system/mysql.service 2>/dev/null || true
+                rm -f /etc/systemd/system/dnsdist.service.d/restart.conf
+                echo -e "${YELLOW}  Purge nftables...${RESET}"
+                for t in kighmu slowdns kighmu-panel xray v2ray zivpn hysteria badvpn udp-custom dropbear; do nft delete table inet "$t" 2>/dev/null || true; done
+                nft flush ruleset; rm -f /etc/nftables/*.nft 2>/dev/null || true
+                echo -e "${YELLOW}  Suppression des configurations...${RESET}"
+                rm -rf /etc/kighmu /etc/kighmu-v2 /etc/xray /etc/v2ray /etc/hysteria /etc/zivpn /etc/slowdns /etc/dnsdist /etc/dropbear /etc/stunnel /etc/udp-custom /etc/haproxy /opt/kighmu-panel /root/Kighmu /root/.pm2 /etc/nginx /var/lib/mysql /etc/mysql
+                rm -f /etc/profile.d/kighmu-panel.sh /etc/sysctl.d/99-v2ray.conf /etc/sysctl.d/99-slowdns.conf /etc/logrotate.d/slowdns
+                echo -e "${YELLOW}  Suppression des logs...${RESET}"
+                rm -rf /var/log/xray /var/log/v2ray /var/log/slowdns /var/log/hysteria /var/log/zivpn /var/log/nginx /var/log/mysql
+                echo -e "${YELLOW}  Suppression des utilisateurs SSH...${RESET}"
+                awk -F: '$7~/bash|sh/ && $3>=1000{print $1}' /etc/passwd 2>/dev/null | while read -r u; do userdel -r "$u" 2>/dev/null || true; done
+                crontab -r 2>/dev/null || true
+                chattr -i /etc/resolv.conf 2>/dev/null || true; echo "nameserver 1.1.1.1" > /etc/resolv.conf; chattr +i /etc/resolv.conf 2>/dev/null || true
+                echo -e "${YELLOW}  Suppression des paquets...${RESET}"
+                apt-get remove --purge -y xray v2ray hysteria zivpn nginx haproxy mysql-server nodejs npm stunnel4 dropbear dnsdist certbot python3-certbot-nginx 2>/dev/null || true
+                apt-get autoremove --purge -y 2>/dev/null || true; apt-get autoclean 2>/dev/null || true
+                systemctl daemon-reload
+                echo -e "${GREEN}  ✓ Désinstallation COMPLÈTE terminée. VPS état d'origine.${RESET}"
+                echo -e "  ${YELLOW}Recommandé : reboot.${RESET}"
+            else
+                echo -e "  ${YELLOW}Désinstallation annulée.${RESET}"
+            fi; pause;;
+        0|q) ;;
+    esac
 }
 
 menu_bot_vip() {
@@ -1382,28 +1693,133 @@ EOF
 }
 
 menu_change_banner() {
-    sub_header '📝  CHANGE BANNER SSH  📝'
-    printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
-    printf "${BG}║${RESET}  ${LAV}Banner actuel:${RESET}${WHITE}%-51s${RESET} ${BG}║${RESET}\n" "$(head -1 /etc/ssh/banner.txt 2>/dev/null || echo "Aucun")"
-    printf "${BG}║${RESET}                                                                    ${BG}║${RESET}\n"
-    printf "${BG}║${RESET}  Entrez le nouveau texte du banner (une ligne)${RESET}                 ${BG}║${RESET}\n"
-    sub_footer
-    prompt_sub "NOUVEAU BANNER (ou 0)"
-    [[ "$SUB" != "0" && -n "$SUB" ]] && { echo "$SUB" | tee /etc/ssh/banner.txt > /dev/null; systemctl restart ssh; echo -e "${GREEN}  ✓ Banner mis à jour${RESET}"; pause; }
+    local BANNER_FILE="/etc/ssh/banner.txt"
+    while true; do
+        sub_header '📝  CHANGE BANNER SSH  📝'
+        printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
+        printf "${BG}║${RESET}  ${LAV}Banner actuel:${RESET}                                          ${BG}║${RESET}\n"
+        if [[ -f "$BANNER_FILE" ]]; then
+            head -4 "$BANNER_FILE" | while IFS= read -r line; do
+                printf "${BG}║${RESET}  ${WHITE}%-66s${RESET} ${BG}║${RESET}\n" "$line"
+            done
+            [[ $(wc -l < "$BANNER_FILE") -gt 4 ]] && printf "${BG}║${RESET}  ${DIM}... (+%d lignes)${RESET}                                          ${BG}║${RESET}\n" $(($(wc -l < "$BANNER_FILE")-4))
+        else
+            printf "${BG}║${RESET}  ${YELLOW}Aucun banner défini${RESET}                                         ${BG}║${RESET}\n"
+        fi
+        printf "${BG}╠══════════════════════════════════════════════════════════════════════╣${RESET}\n"
+        sub_row 1 "BANNER TEXTE PERSONNALISE"  2 "BANNER MULTI-LIGNES"
+        sub_row 3 "BANNER PAR DEFAUT"          4 "PREVIEW BANNER"
+        sub_row 5 "DESACTIVER BANNER"          6 "BANNER COLORES (ASCII)"
+        sub_footer
+        prompt_sub "BANNER SSH"
+        case $SUB in
+            1) clear; echo -e "${CYAN}━━ Banner texte ━━${RESET}"; read -rp "  Texte du banner: " t
+                [[ -n "$t" && "$t" != "0" ]] && { echo "$t" > "$BANNER_FILE"; chmod 644 "$BANNER_FILE"; systemctl restart ssh; echo -e "${GREEN}  ✓ Banner mis à jour${RESET}"; }; pause;;
+            2) clear; echo -e "${CYAN}━━ Banner multi-lignes (Entrée = fin) ━━${RESET}"
+                > "$BANNER_FILE"
+                echo -e "  ${YELLOW}Entrez vos lignes (ligne vide pour terminer):${RESET}"
+                while true; do read -rp "  " l; [[ -z "$l" ]] && break; echo "$l" >> "$BANNER_FILE"; done
+                chmod 644 "$BANNER_FILE"; systemctl restart ssh; echo -e "${GREEN}  ✓ Banner multi-lignes enregistré${RESET}"; pause;;
+            3) clear; echo -e "${CYAN}━━ Banner par défaut ━━${RESET}"
+                cat > "$BANNER_FILE" << 'BANEOF'
+█████████████████████████████████████████████████████████████████
+█                                                               █
+█           WELCOME TO KIGHMU PREMIUM VPN SERVER                █
+█        ⚠ UNAUTHORIZED ACCESS IS STRICTLY PROHIBITED ⚠         █
+█                                                               █
+█████████████████████████████████████████████████████████████████
+BANEOF
+                chmod 644 "$BANNER_FILE"; systemctl restart ssh; echo -e "${GREEN}  ✓ Banner par défaut appliqué${RESET}"; pause;;
+            4) clear; echo -e "${CYAN}━━ Preview banner ━━${RESET}"
+                if [[ -f "$BANNER_FILE" ]]; then
+                    echo -e "${WHITE}$(cat "$BANNER_FILE")${RESET}"
+                else
+                    echo -e "  ${YELLOW}Aucun banner défini${RESET}"
+                fi; pause;;
+            5) clear; echo -e "${CYAN}━━ Désactiver banner ━━${RESET}"
+                rm -f "$BANNER_FILE"
+                sed -i 's/^Banner .*/#Banner none/' /etc/ssh/sshd_config 2>/dev/null || true
+                systemctl restart ssh; echo -e "${GREEN}  ✓ Banner désactivé${RESET}"; pause;;
+            6) clear; echo -e "${CYAN}━━ Bannières colorées ASCII ━━${RESET}"
+                echo -e "  ${ORANGE}[1]${RESET} ${WHITE}Classic Kighmu${RESET}"
+                echo -e "  ${ORANGE}[2]${RESET} ${WHITE}Neon Style${RESET}"
+                echo -e "  ${ORANGE}[3]${RESET} ${WHITE}Minimal${RESET}"
+                read -rp "  Choix [1-3]: " bc
+                case $bc in
+                    1) cat > "$BANNER_FILE" << 'BAN1'
+╔═══════════════════════════════════════════════════════════════╗
+║            🚀 KIGHMU PREMIUM VPN - SERVER ONLINE 🚀         ║
+║            ⚠ CONNEXION NON AUTORISEE INTERDITE ⚠           ║
+╚═══════════════════════════════════════════════════════════════╝
+BAN1;;
+                    2) cat > "$BANNER_FILE" << 'BAN2'
+███╗   ██╗███████╗ ██████╗ ███╗   ██╗
+████╗  ██║██╔════╝██╔═══██╗████╗  ██║
+██╔██╗ ██║█████╗  ██║   ██║██╔██╗ ██║
+██║╚██╗██║██╔══╝  ██║   ██║██║╚██╗██║
+██║ ╚████║███████╗╚██████╔╝██║ ╚████║
+╚═╝  ╚═══╝╚══════╝ ╚═════╝ ╚═╝  ╚═══╝
+BAN2;;
+                    3) cat > "$BANNER_FILE" << 'BAN3'
+KIGHMU VPN
+Connexion surveillee - Acces reserve aux abonnes
+BAN3;;
+                esac
+                chmod 644 "$BANNER_FILE"; systemctl restart ssh; echo -e "${GREEN}  ✓ Banner appliqué${RESET}"; pause;;
+            0|q) break ;;
+        esac
+    done
 }
 
 menu_log_create_user() {
-    sub_header '📋  LOG CREATE USER  📋'
-    printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
-    local logfile="/var/log/kighmu-user.log"
-    if [[ -f "$logfile" ]]; then
-        tail -15 "$logfile" | while IFS= read -r line; do printf "${BG}║${RESET}  ${WHITE}%-66s${RESET} ${BG}║${RESET}\n" "$line"; done
-    else
-        printf "${BG}║${RESET}  ${YELLOW}Aucun log de création disponible${RESET}                     ${BG}║${RESET}\n"
-    fi
-    sub_footer
-    prompt_sub "LOG"
-    pause
+    local logfile="/var/log/kighmu-user.log" logfile_xray="/var/log/kighmu-xray-user.log"
+    while true; do
+        sub_header '📋  LOG CREATE USER  📋'
+        printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
+        sub_row 1 "VOIR DERNIERS LOGS"         2 "VOIR TOUS LES LOGS"
+        sub_row 3 "FILTRER PAR UTILISATEUR"     4 "LOGS XRAY/V2RAY"
+        sub_row 5 "EFFACER LOGS"                6 "EXPORTER LOGS"
+        sub_footer
+        prompt_sub "LOG USER"
+        case $SUB in
+            1) clear; echo -e "${CYAN}━━ Derniers logs (20) ━━${RESET}"
+                if [[ -f "$logfile" ]]; then
+                    echo -e "  ${LAV}Date       Heure    Action          User${RESET}"
+                    echo -e "  ${DIM}──────────────────────────────────────────────${RESET}"
+                    tail -20 "$logfile" | while IFS= read -r line; do echo -e "  ${WHITE}$line${RESET}"; done
+                else
+                    echo -e "  ${YELLOW}Aucun log${RESET}"
+                fi; pause;;
+            2) clear; echo -e "${CYAN}━━ Tous les logs ━━${RESET}"
+                if [[ -f "$logfile" ]]; then
+                    wc -l < "$logfile" | xargs -I{} echo -e "  ${LAV}Total:${RESET} ${WHITE}{} lignes${RESET}"
+                    echo -e "  ${DIM}──────────────────────────────────────────────${RESET}"
+                    cat "$logfile" | while IFS= read -r line; do echo -e "  ${WHITE}$line${RESET}"; done | less -R
+                else
+                    echo -e "  ${YELLOW}Aucun log${RESET}"
+                fi; pause;;
+            3) clear; echo -e "${CYAN}━━ Filtrer par utilisateur ━━${RESET}"
+                read -rp "  Nom d'utilisateur: " fu
+                if [[ -n "$fu" && -f "$logfile" ]]; then
+                    grep -i "$fu" "$logfile" | while IFS= read -r line; do echo -e "  ${WHITE}$line${RESET}"; done
+                    echo; echo -e "  ${LAV}Total:${RESET} $(grep -ci "$fu" "$logfile" 2>/dev/null || echo 0) entrées"
+                else
+                    echo -e "  ${YELLOW}Aucun résultat pour '$fu'${RESET}"
+                fi; pause;;
+            4) clear; echo -e "${CYAN}━━ Logs Xray/V2Ray ━━${RESET}"
+                if [[ -f "$logfile_xray" ]]; then
+                    tail -20 "$logfile_xray" | while IFS= read -r line; do echo -e "  ${WHITE}$line${RESET}"; done
+                else
+                    echo -e "  ${YELLOW}Aucun log Xray/V2Ray${RESET}"
+                fi; pause;;
+            5) clear; echo -e "${RED}⚠ Effacer tous les logs ?${RESET}"; read -rp "  Confirmer (o/N): " c
+                [[ "$c" =~ ^[oO]$ ]] && { > "$logfile" 2>/dev/null; > "$logfile_xray" 2>/dev/null; echo -e "${GREEN}  ✓ Logs effacés${RESET}"; }; pause;;
+            6) clear; echo -e "${CYAN}━━ Export logs ━━${RESET}"
+                local exp="/root/kighmu-logs-$(date +%Y%m%d-%H%M).tar.gz"
+                tar -czf "$exp" "$logfile" "$logfile_xray" 2>/dev/null && echo -e "${GREEN}  ✓ Exporté: $exp${RESET}" || echo -e "${RED}  ✗ Aucun log à exporter${RESET}"; pause;;
+            0|q) break ;;
+        esac
+    done
 }
 
 # ================================================
@@ -1434,7 +1850,7 @@ while true; do
         20) menu_quota_usage ;;
         21) menu_clear_cache ;;
         22) menu_cek_bandwidth ;;
-        23) menu_up_script ;;
+        23) menu_desinstalle ;;
         24) menu_bot_vip ;;
         25) menu_change_banner ;;
         26) menu_log_create_user ;;
