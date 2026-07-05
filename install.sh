@@ -1304,18 +1304,78 @@ menu_up_script() {
 }
 
 menu_bot_vip() {
+    local SCRIPT_DIR="/root/Kighmu" BOT_BIN="$SCRIPT_DIR/bot2" BOTS_CLIENT="/etc/kighmu/bots.json" SERVICE_FILE="/etc/systemd/system/bot2.service"
     while true; do
         sub_header '🤖  MENU BOT VIP  🤖'
         printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
-        sub_row 1 "STATUT BOT"              2 "START BOT"
-        sub_row 3 "STOP BOT"                4 "SET TOKEN BOT"
+        sub_row 1 "STATUT BOT"              2 "COMPILER BOT"
+        sub_row 3 "INSTALLER (SYSTEMD)"     4 "DEMARRER BOT"
+        sub_row 5 "ARRETER BOT"             6 "RESTART BOT"
+        sub_row 7 "LOGS BOT"                8 "AJOUTER CLIENT"
+        sub_row 9 "GERER USERS CLIENT"      10 "SET TOKEN"
+        sub_row 11 "SET ADMIN ID"           12 "VOIR BOTS.JSON"
+        sub_row 13 "DESINSTALLER BOT"       0 ""
         sub_footer
         prompt_sub "BOT VIP"
         case $SUB in
-            1) clear; pm2 show kighmu-bot 2>/dev/null | grep -E 'status|uptime' || echo -e "${RED}  Bot inactif${RESET}"; pause;;
-            2) clear; pm2 start kighmu-bot 2>/dev/null && echo -e "${GREEN}  ✓ Bot démarré${RESET}" || echo -e "${RED}  ✗ Échec${RESET}"; pause;;
-            3) clear; pm2 stop kighmu-bot 2>/dev/null && echo -e "${GREEN}  ✓ Bot arrêté${RESET}"; pause;;
-            4) clear; read -rp "  Token Telegram: " t; echo "BOT_TOKEN=$t" >> /opt/kighmu-panel/.env 2>/dev/null; echo -e "${GREEN}  ✓ Token enregistré${RESET}"; pause;;
+            1) clear; echo -e "${CYAN}━━ Statut Bot ━━${RESET}"
+                if systemctl is-active --quiet bot2 2>/dev/null; then echo -e "  ${GREEN}✓ Bot actif (systemd)${RESET}"
+                elif pm2 show kighmu-bot &>/dev/null 2>&1; then echo -e "  ${GREEN}✓ Bot actif (pm2)${RESET}"
+                else echo -e "  ${RED}✗ Bot inactif${RESET}"; fi
+                [[ -f "$BOT_BIN" ]] && echo -e "  ${GREEN}✓ Binaire présent${RESET}" || echo -e "  ${RED}✗ Binaire manquant${RESET}"; pause;;
+            2) clear; echo -e "${CYAN}━━ Compilation Bot ━━${RESET}"
+                command -v go &>/dev/null || { echo -e "${RED}  Go non installé. Installez golang-go${RESET}"; pause; break; }
+                mkdir -p "$SCRIPT_DIR"
+                cp /opt/kighmu-panel/frontend/bot/bot2.go "$SCRIPT_DIR/bot2.go" 2>/dev/null || curl -fsSL "https://raw.githubusercontent.com/kinf744/Tyiop24/main/bot2.go" -o "$SCRIPT_DIR/bot2.go" 2>/dev/null || { echo -e "${RED}  bot2.go introuvable${RESET}"; pause; break; }
+                cd "$SCRIPT_DIR" && go mod init telegram-bot 2>/dev/null || true && go mod tidy && go build -o bot2 bot2.go 2>/dev/null && echo -e "${GREEN}  ✓ Bot compilé${RESET}" || echo -e "${RED}  ✗ Échec compilation${RESET}"; pause;;
+            3) clear; echo -e "${CYAN}━━ Installation systemd ━━${RESET}"
+                [[ ! -f "$BOT_BIN" ]] && { echo -e "${RED}  Compilez d'abord (option 2)${RESET}"; pause; break; }
+                local tk=$(grep BOT_TOKEN /opt/kighmu-panel/.env 2>/dev/null | cut -d= -f2)
+                local ai=$(grep ADMIN_ID /opt/kighmu-panel/.env 2>/dev/null | cut -d= -f2)
+                [[ -z "$tk" ]] && read -rp "  Bot Token: " tk
+                [[ -z "$ai" ]] && read -rp "  Admin ID: " ai
+                cat > "$SERVICE_FILE" << EOF
+[Unit]
+Description=Telegram VPS Control Bot
+After=network.target
+[Service]
+Type=simple
+User=root
+WorkingDirectory=$SCRIPT_DIR
+ExecStart=$BOT_BIN
+Restart=always
+RestartSec=5
+Environment=BOT_TOKEN=$tk
+Environment=ADMIN_ID=$ai
+[Install]
+WantedBy=multi-user.target
+EOF
+                systemctl daemon-reload && systemctl enable --now bot2 && echo -e "${GREEN}  ✓ Bot installé et démarré${RESET}" || echo -e "${RED}  ✗ Échec${RESET}"; pause;;
+            4) clear; systemctl start bot2 2>/dev/null && echo -e "${GREEN}  ✓ Bot démarré${RESET}" || echo -e "${YELLOW}  Déjà actif ou non installé${RESET}"; pause;;
+            5) clear; systemctl stop bot2 2>/dev/null && echo -e "${GREEN}  ✓ Bot arrêté${RESET}" || echo -e "${RED}  ✗ Déjà arrêté${RESET}"; pause;;
+            6) clear; systemctl restart bot2 2>/dev/null && echo -e "${GREEN}  ✓ Bot redémarré${RESET}" || echo -e "${RED}  ✗ Échec${RESET}"; pause;;
+            7) clear; echo -e "${YELLOW}  Ctrl+C pour quitter${RESET}"; journalctl -u bot2 -n 50 --no-pager 2>/dev/null || echo "  Aucun log"; pause;;
+            8) clear; echo -e "${CYAN}━━ Ajouter un client bot ━━${RESET}"
+                read -rp "  Nom du bot: " nom; read -rp "  Token: " token; read -rp "  ID: " id; read -rp "  Rôle (admin/client): " role
+                [[ "$role" != "admin" && "$role" != "client" ]] && { echo -e "${RED}  Rôle invalide${RESET}"; pause; break; }
+                read -rp "  Utilisateurs (virgules): " usrs; read -rp "  Expire (jours): " days
+                local uj="[]"
+                IFS=',' read -ra UA <<< "$usrs"; for u in "${UA[@]}"; do
+                    [[ -n "$u" ]] && uj=$(echo "$uj" | jq --arg n "$u" --arg e "$(date -d "+$days days" +%Y-%m-%d)" '. += [{"nom":$n,"expire":$e}]')
+                done
+                jq --arg nom "$nom" --arg token "$token" --argjson id "$id" --arg role "$role" --argjson users "$uj" '.bots += [{"NomBot":$nom,"Token":$token,"ID":$id,"Role":$role,"Utilisateurs":$users}]' "$BOTS_CLIENT" > /tmp/bc.json && mv /tmp/bc.json "$BOTS_CLIENT" && chmod 600 "$BOTS_CLIENT" && echo -e "${GREEN}  ✓ Client $nom ajouté${RESET}" || echo -e "${RED}  ✗ Échec${RESET}"; pause;;
+            9) clear; echo -e "${CYAN}━━ Gérer utilisateurs client ━━${RESET}"
+                jq -r '.bots[] | "  \(.NomBot) (ID: \(.ID))"' "$BOTS_CLIENT" 2>/dev/null || { echo "  Aucun client"; pause; break; }
+                read -rp "  Nom du client: " nc
+                local ulist=$(jq -r --arg n "$nc" '.bots[] | select(.NomBot == $n) | .Utilisateurs[] | "  \(.nom) | expire: \(.expire)"' "$BOTS_CLIENT" 2>/dev/null)
+                [[ -z "$ulist" ]] && { echo "  Aucun utilisateur"; pause; break; }
+                echo "$ulist"; read -rp "  Supprimer utilisateur (nom): " ud
+                jq --arg n "$nc" --arg u "$ud" '(.bots[] | select(.NomBot == $n) | .Utilisateurs) |= map(select(.nom != $u))' "$BOTS_CLIENT" > /tmp/bc.json && mv /tmp/bc.json "$BOTS_CLIENT" && echo -e "${GREEN}  ✓ $ud supprimé${RESET}" || echo -e "${RED}  ✗ Échec${RESET}"; pause;;
+            10) clear; echo -e "${CYAN}━━ Token Bot ━━${RESET}"; read -rp "  Token Telegram: " t; grep -q BOT_TOKEN /opt/kighmu-panel/.env 2>/dev/null && sed -i "s/BOT_TOKEN=.*/BOT_TOKEN=$t/" /opt/kighmu-panel/.env || echo "BOT_TOKEN=$t" >> /opt/kighmu-panel/.env; echo -e "${GREEN}  ✓ Token enregistré${RESET}"; pause;;
+            11) clear; echo -e "${CYAN}━━ Admin ID ━━${RESET}"; read -rp "  Admin Telegram ID: " a; grep -q ADMIN_ID /opt/kighmu-panel/.env 2>/dev/null && sed -i "s/ADMIN_ID=.*/ADMIN_ID=$a/" /opt/kighmu-panel/.env || echo "ADMIN_ID=$a" >> /opt/kighmu-panel/.env; echo -e "${GREEN}  ✓ Admin ID enregistré${RESET}"; pause;;
+            12) clear; echo -e "${CYAN}━━ bots.json ━━${RESET}"; jq . "$BOTS_CLIENT" 2>/dev/null || echo "  Fichier absent ou vide"; pause;;
+            13) clear; echo -e "${RED}⚠ Désinstaller le bot ?${RESET}"; read -rp "  Confirmer (o/N): " C
+                [[ "$C" =~ ^[oO]$ ]] && { systemctl stop bot2 2>/dev/null; systemctl disable bot2 2>/dev/null; rm -f "$SERVICE_FILE" "$BOT_BIN"; rm -f /root/Kighmu/go.mod /root/Kighmu/go.sum /root/Kighmu/bot2.go 2>/dev/null; echo -e "${GREEN}  ✓ Bot désinstallé${RESET}"; } || echo -e "  Annulé"; pause;;
             0|q) break ;;
         esac
     done
