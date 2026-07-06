@@ -1,7 +1,7 @@
 #!/bin/bash
 # Kighmu - Xray & V2Ray
 # VMess, VLESS, Trojan, Shadowsocks + V2Ray TCP
-set -euo pipefail
+set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PANEL_DIR="/opt/kighmu-panel"

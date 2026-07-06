@@ -1,6 +1,6 @@
 #!/bin/bash
 # Kighmu Panel - Auto-Installation Commercial 4-en-1
-set -euo pipefail
+set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PANEL_DIR="/opt/kighmu-panel"
@@ -398,7 +398,7 @@ BWSVC
 # ── PANEL DE CONTRÔLE SSH ──
 deploy_control_panel() {
     step_header '🎛️  Panneau de Contrôle SSH  🎛️'
-    mkdir -p /etc/kighmu
+    mkdir -p /etc/kighmu /etc/kighmu-v2
     # Extraire le code du panneau depuis la fin de ce script (marqueurs PANEL_CODE)
     sed -n '/^# PANEL_CODE_START$/,/^# PANEL_CODE_END$/p' "$0" | tail -n +2 | head -n -1 > /etc/kighmu-v2/panel.sh || {
         err "Extraction du panneau échouée"; return 1;
@@ -537,7 +537,7 @@ main_menu
 
 # PANEL_CODE_START
 # Kighmu Control Panel - Design Terminal Haut de Gamme
-set -euo pipefail
+set -uo pipefail
 
 # ── Couleurs 24-bit ──
 BG='\e[48;2;43;15;66m'
@@ -1759,7 +1759,8 @@ BANEOF
 ║            🚀 KIGHMU PREMIUM VPN - SERVER ONLINE 🚀         ║
 ║            ⚠ CONNEXION NON AUTORISEE INTERDITE ⚠           ║
 ╚═══════════════════════════════════════════════════════════════╝
-BAN1;;
+BAN1
+                    ;;
                     2) cat > "$BANNER_FILE" << 'BAN2'
 ███╗   ██╗███████╗ ██████╗ ███╗   ██╗
 ████╗  ██║██╔════╝██╔═══██╗████╗  ██║
@@ -1767,11 +1768,13 @@ BAN1;;
 ██║╚██╗██║██╔══╝  ██║   ██║██║╚██╗██║
 ██║ ╚████║███████╗╚██████╔╝██║ ╚████║
 ╚═╝  ╚═══╝╚══════╝ ╚═════╝ ╚═╝  ╚═══╝
-BAN2;;
+BAN2
+                    ;;
                     3) cat > "$BANNER_FILE" << 'BAN3'
 KIGHMU VPN
 Connexion surveillee - Acces reserve aux abonnes
-BAN3;;
+BAN3
+                    ;;
                 esac
                 chmod 644 "$BANNER_FILE"; systemctl restart ssh; echo -e "${GREEN}  ✓ Banner appliqué${RESET}"; pause;;
             0|q) break ;;
