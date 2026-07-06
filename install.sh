@@ -825,6 +825,21 @@ S_SSH=$(svc ssh); S_DROP=$(svc dropbear-custom); S_NGINX=$(svc nginx)
 S_HAPROXY=$(svc haproxy); S_XRAY=$(svc xray); S_V2RAY=$(svc v2ray)
 S_HY=$(svc hysteria); S_ZIVPN=$(svc zivpn); S_SSHWS=$(svc sshws)
 
+# ── Ligne services alignée (3 colonnes de 18 chars) ──
+svc_line() {
+    local line="" w=18
+    while [[ $# -ge 2 ]]; do
+        local name="$1" stat="$2"; shift 2
+        local stat_plain=$(echo -e "$stat" | sed 's/\x1b\[[0-9;]*m//g')
+        local cell="${LAV}${name}${RESET} ${CYAN}:${RESET} ${stat}"
+        local vis=$(( ${#name} + 3 + ${#stat_plain} ))
+        local needed=$((w - vis))
+        [[ $needed -gt 0 ]] && cell+=$(printf '%*s' "$needed" '')
+        line+="$cell"
+    done
+    echo -e "${BG}  ${line}"
+}
+
 # ── DRAW ──
 HL() { printf "${BG}${CYAN}%s${RESET}\n" "$(printf '┄%.0s' {1..64})"; }
 
@@ -858,21 +873,21 @@ draw_panel() {
     HL
     echo -e "${BG}           ${ORANGE}>>>${RESET} ${LAV}${BOLD}ACCOUNT INFORMATION${RESET} ${ORANGE}<<<${RESET}"
     HL
-    echo -e "${BG}   ${LAV}SSH/UDP${RESET}      ${CYAN}:${RESET} ${WHITE}${N_SSH}${RESET}  ${GREEN}ACCOUNT PREMIUM${RESET}"
-    echo -e "${BG}   ${LAV}VMESS${RESET}        ${CYAN}:${RESET} ${WHITE}${N_VMESS}${RESET}  ${GREEN}ACCOUNT PREMIUM${RESET}"
-    echo -e "${BG}   ${LAV}VLESS${RESET}        ${CYAN}:${RESET} ${WHITE}${N_VLESS}${RESET}  ${GREEN}ACCOUNT PREMIUM${RESET}"
-    echo -e "${BG}   ${LAV}TROJAN${RESET}       ${CYAN}:${RESET} ${WHITE}${N_TROJAN}${RESET}  ${GREEN}ACCOUNT PREMIUM${RESET}"
-    echo -e "${BG}   ${LAV}V2RAY DNS${RESET}   ${CYAN}:${RESET} ${WHITE}${N_V2RAY}${RESET}  ${GREEN}ACCOUNT PREMIUM${RESET}"
-    echo -e "${BG}   ${LAV}HYSTERIA${RESET}     ${CYAN}:${RESET} ${WHITE}${N_HY}${RESET}  ${GREEN}ACCOUNT PREMIUM${RESET}"
-    echo -e "${BG}   ${LAV}ZIVPN${RESET}        ${CYAN}:${RESET} ${WHITE}${N_ZIVPN}${RESET}  ${GREEN}ACCOUNT PREMIUM${RESET}"
+    printf "${BG}   ${LAV}%-9s${RESET} ${CYAN}:${RESET} ${WHITE}%s${RESET}  ${GREEN}ACCOUNT PREMIUM${RESET}\n" "SSH/UDP" "$N_SSH"
+    printf "${BG}   ${LAV}%-9s${RESET} ${CYAN}:${RESET} ${WHITE}%s${RESET}  ${GREEN}ACCOUNT PREMIUM${RESET}\n" "VMESS" "$N_VMESS"
+    printf "${BG}   ${LAV}%-9s${RESET} ${CYAN}:${RESET} ${WHITE}%s${RESET}  ${GREEN}ACCOUNT PREMIUM${RESET}\n" "VLESS" "$N_VLESS"
+    printf "${BG}   ${LAV}%-9s${RESET} ${CYAN}:${RESET} ${WHITE}%s${RESET}  ${GREEN}ACCOUNT PREMIUM${RESET}\n" "TROJAN" "$N_TROJAN"
+    printf "${BG}   ${LAV}%-9s${RESET} ${CYAN}:${RESET} ${WHITE}%s${RESET}  ${GREEN}ACCOUNT PREMIUM${RESET}\n" "V2RAY DNS" "$N_V2RAY"
+    printf "${BG}   ${LAV}%-9s${RESET} ${CYAN}:${RESET} ${WHITE}%s${RESET}  ${GREEN}ACCOUNT PREMIUM${RESET}\n" "HYSTERIA" "$N_HY"
+    printf "${BG}   ${LAV}%-9s${RESET} ${CYAN}:${RESET} ${WHITE}%s${RESET}  ${GREEN}ACCOUNT PREMIUM${RESET}\n" "ZIVPN" "$N_ZIVPN"
 
     echo
     HL
     echo -e "${BG}               ${ORANGE}>>>${RESET} ${LAV}${BOLD}PREMIUM MENU${RESET} ${ORANGE}<<<${RESET}"
     HL
-    printf "${BG}  ${LAV}SSH${RESET} ${CYAN}:${RESET} %b      ${LAV}NGINX${RESET} ${CYAN}:${RESET} %b      ${LAV}HAPROXY${RESET} ${CYAN}:${RESET} %b\n" "$S_SSH" "$S_NGINX" "$S_HAPROXY"
-    printf "${BG}  ${LAV}XRAY${RESET} ${CYAN}:${RESET} %b     ${LAV}V2RAY${RESET} ${CYAN}:${RESET} %b      ${LAV}DROPBEAR${RESET} ${CYAN}:${RESET} %b\n" "$S_XRAY" "$S_V2RAY" "$S_DROP"
-    printf "${BG}  ${LAV}HYSTERIA${RESET} ${CYAN}:${RESET} %b ${LAV}ZIVPN${RESET} ${CYAN}:${RESET} %b      ${LAV}WS-epro${RESET} ${CYAN}:${RESET} %b\n" "$S_HY" "$S_ZIVPN" "$S_SSHWS"
+    svc_line "SSH" "$S_SSH" "NGINX" "$S_NGINX" "HAPROXY" "$S_HAPROXY"
+    svc_line "XRAY" "$S_XRAY" "V2RAY" "$S_V2RAY" "DROPBEAR" "$S_DROP"
+    svc_line "HYSTERIA" "$S_HY" "ZIVPN" "$S_ZIVPN" "WS-epro" "$S_SSHWS"
 
     echo
     HL
