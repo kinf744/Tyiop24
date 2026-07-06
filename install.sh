@@ -666,7 +666,7 @@ N_ZIVPN=$([[ -f /etc/zivpn/users.list ]] && awk -F'|' -v d="$(date +%Y-%m-%d)" '
 N_TOTAL=$((N_SSH + N_VMESS + N_VLESS + N_TROJAN + N_SHADOW + N_V2RAY + N_HY + N_ZIVPN))
 
 # Statuts services
-svc() { systemctl is-active --quiet "$1" 2>/dev/null && echo "${GREEN}ON${RESET}" || echo "${RED}OFF${RESET}"; }
+svc() { systemctl is-active --quiet "$1" 2>/dev/null && echo -e "${GREEN}ON${RESET}" || echo -e "${RED}OFF${RESET}"; }
 S_SSH=$(svc ssh); S_DROP=$(svc dropbear-custom); S_NGINX=$(svc nginx)
 S_HAPROXY=$(svc haproxy); S_XRAY=$(svc xray); S_V2RAY=$(svc v2ray)
 S_HY=$(svc hysteria); S_ZIVPN=$(svc zivpn)
