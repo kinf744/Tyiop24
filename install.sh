@@ -1772,35 +1772,143 @@ menu_desinstalle() {
             echo -e "${BG}${RED}╚══════════════════════════════════════════════════════════════════════╝${RESET}"
             read -rp "  » " CONFIRM
             if [[ "$CONFIRM" == "PURGE" ]]; then
-                echo -e "${YELLOW}  Arrêt de tous les services...${RESET}"
-                for s in xray v2ray nginx haproxy hysteria zivpn dropbear-custom sshws ssl_tls proxy--ws ws-dropbear ws-stunnel socks_python_ws socks_python udp-custom slowdns-ns4 slowdns-nv4 dnsdist bot2 mysql kighmu-bandwidth; do
+                # ── 1. Arrêt de tous les services ──
+                echo -e "${YELLOW}  [1/12] Arrêt de tous les services...${RESET}"
+                for s in $(systemctl list-units --type=service --all --no-legend 2>/dev/null | awk '{print $1}' | sed 's/\.service//' | grep -E 'xray|v2ray|nginx|haproxy|hysteria|zivpn|dropbear|sshws|ws-|stunnel|socks|udp-custom|slowdns|dnsdist|bot2|mysql|kighmu|panel|badvpn|nftables-tunnel|proxy'); do
                     systemctl disable --now "$s" 2>/dev/null || true
+                done && sleep 2
+                pm2 kill 2>/dev/null || true; pm2 unstartup 2>/dev/null || true
+
+                # ── 2. Suppression de tous les binaires ──
+                echo -e "${YELLOW}  [2/12] Suppression des binaires...${RESET}"
+                rm -f \
+                    /usr/local/bin/xray \
+                    /usr/local/bin/v2ray \
+                    /usr/local/bin/dnstt-server \
+                    /usr/local/bin/hysteria \
+                    /usr/local/bin/zivpn \
+                    /usr/local/bin/badvpn-udpgw \
+                    /usr/local/bin/udp-custom \
+                    /usr/local/bin/wstunnel \
+                    /usr/local/bin/proxy--ws \
+                    /usr/local/bin/ws2_proxy.py \
+                    /usr/local/bin/KIGHMUPROXY.py \
+                    /usr/local/bin/ws-dropbear \
+                    /usr/local/bin/ws-stunnel \
+                    /usr/local/bin/init-nftables.sh \
+                    /usr/local/bin/kighmu-bandwidth.sh \
+                    /usr/local/bin/slowdns-ns4-start.sh \
+                    /usr/local/bin/slowdns-nv4-start.sh \
+                    /usr/local/bin/geoip.dat \
+                    /usr/local/bin/geosite.dat \
+                    /root/Kighmu/bot2 2>/dev/null || true
+
+                # ── 3. Suppression fichiers systemd ──
+                echo -e "${YELLOW}  [3/12] Suppression des services systemd...${RESET}"
+                rm -f \
+                    /etc/systemd/system/{xray,v2ray,nginx,haproxy,hysteria,zivpn,dropbear-custom,sshws,ssl_tls,proxy--ws,ws-dropbear,ws-stunnel,socks_python_ws,socks_python,udp-custom,badvpn@,slowdns-ns4,slowdns-nv4,dnsdist,bot2,kighmu-bandwidth,kighmu-panel,pm2-kighmu}.service \
+                    /etc/systemd/system/nftables-tunnel@*.service \
+                    /etc/systemd/system/mysql.service \
+                    /etc/systemd/system/dnsdist.service.d/restart.conf 2>/dev/null || true
+                find /etc/systemd/system/ -name '*kighmu*' -o -name '*slowdns*' -o -name '*ws-*' -o -name '*socks*' -o -name '*badvpn*' -o -name '*udp-custom*' 2>/dev/null | xargs rm -f 2>/dev/null || true
+
+                # ── 4. Purge nftables + iptables ──
+                echo -e "${YELLOW}  [4/12] Purge nftables + iptables...${RESET}"
+                for t in $(nft list tables 2>/dev/null | grep -oP '(?<=table inet )\S+' | grep -E 'kighmu|slowdns|xray|v2ray|zivpn|hysteria|badvpn|udp-custom|dropbear|panel'); do
+                    nft delete table inet "$t" 2>/dev/null || true
                 done
-                pm2 stop kighmu-panel 2>/dev/null || true; pm2 delete kighmu-panel 2>/dev/null || true; pm2 unstartup 2>/dev/null || true
-                echo -e "${YELLOW}  Suppression des binaires...${RESET}"
-                rm -f /usr/local/bin/xray /usr/local/bin/v2ray /usr/local/bin/dnstt-server /usr/local/bin/hysteria /usr/local/bin/zivpn /usr/local/bin/badvpn-udpgw /usr/local/bin/udp-custom /root/Kighmu/bot2
-                echo -e "${YELLOW}  Suppression des services systemd...${RESET}"
-                rm -f /etc/systemd/system/{xray,v2ray,nginx,haproxy,hysteria,zivpn,dropbear-custom,sshws,ssl_tls,proxy--ws,ws-dropbear,ws-stunnel,socks_python_ws,socks_python,udp-custom,badvpn@,slowdns-ns4,slowdns-nv4,bot2,kighmu-bandwidth}.service 2>/dev/null || true
-                rm -f /etc/systemd/system/nftables-tunnel@*.service /etc/systemd/system/mysql.service 2>/dev/null || true
-                rm -f /etc/systemd/system/dnsdist.service.d/restart.conf
-                echo -e "${YELLOW}  Purge nftables...${RESET}"
-                for t in kighmu slowdns kighmu-panel xray v2ray zivpn hysteria badvpn udp-custom dropbear; do nft delete table inet "$t" 2>/dev/null || true; done
-                nft flush ruleset; rm -f /etc/nftables/*.nft 2>/dev/null || true
-                echo -e "${YELLOW}  Suppression des configurations...${RESET}"
-                rm -rf /etc/kighmu /etc/kighmu-v2 /etc/xray /etc/v2ray /etc/hysteria /etc/zivpn /etc/slowdns /etc/dnsdist /etc/dropbear /etc/stunnel /etc/udp-custom /etc/haproxy /opt/kighmu-panel /root/Kighmu /root/.pm2 /etc/nginx /var/lib/mysql /etc/mysql
-                rm -f /etc/profile.d/kighmu-panel.sh /etc/sysctl.d/99-v2ray.conf /etc/sysctl.d/99-slowdns.conf /etc/logrotate.d/slowdns
-                echo -e "${YELLOW}  Suppression des logs...${RESET}"
-                rm -rf /var/log/xray /var/log/v2ray /var/log/slowdns /var/log/hysteria /var/log/zivpn /var/log/nginx /var/log/mysql
-                echo -e "${YELLOW}  Suppression des utilisateurs SSH...${RESET}"
-                awk -F: '$7~/bash|sh/ && $3>=1000{print $1}' /etc/passwd 2>/dev/null | while read -r u; do userdel -r "$u" 2>/dev/null || true; done
+                nft flush ruleset 2>/dev/null || true
+                rm -f /etc/nftables/*.nft 2>/dev/null || true
+                iptables -P INPUT ACCEPT 2>/dev/null; iptables -P FORWARD ACCEPT 2>/dev/null; iptables -P OUTPUT ACCEPT 2>/dev/null
+                iptables -t nat -F 2>/dev/null; iptables -t mangle -F 2>/dev/null; iptables -F 2>/dev/null; iptables -X 2>/dev/null
+                ip6tables -P INPUT ACCEPT 2>/dev/null; ip6tables -P FORWARD ACCEPT 2>/dev/null; ip6tables -P OUTPUT ACCEPT 2>/dev/null
+                ip6tables -t nat -F 2>/dev/null; ip6tables -t mangle -F 2>/dev/null; ip6tables -F 2>/dev/null; ip6tables -X 2>/dev/null
+                ufw disable 2>/dev/null || true
+
+                # ── 5. Suppression répertoires configurables + données ──
+                echo -e "${YELLOW}  [5/12] Suppression des configurations...${RESET}"
+                rm -rf \
+                    /etc/kighmu /etc/kighmu-v2 /etc/xray /etc/v2ray \
+                    /etc/hysteria /etc/zivpn /etc/slowdns /etc/dnsdist \
+                    /etc/dropbear /etc/stunnel /etc/udp-custom \
+                    /etc/haproxy /etc/nginx /etc/mysql \
+                    /opt/kighmu-panel /root/Kighmu /root/.pm2 \
+                    /root/.npm /root/.config /root/.cache \
+                    /root/socksenv /var/lib/mysql \
+                    /var/www/html /root/.acme.sh \
+                    /root/.local/share/opencode 2>/dev/null || true
+                rm -f \
+                    /etc/profile.d/kighmu-panel.sh \
+                    /etc/sysctl.d/99-v2ray.conf \
+                    /etc/sysctl.d/99-slowdns.conf \
+                    /etc/logrotate.d/slowdns \
+                    /root/.kighmu_info 2>/dev/null || true
+
+                # ── 6. Suppression logs ──
+                echo -e "${YELLOW}  [6/12] Suppression des logs...${RESET}"
+                rm -rf \
+                    /var/log/xray /var/log/v2ray /var/log/slowdns \
+                    /var/log/hysteria /var/log/zivpn /var/log/nginx \
+                    /var/log/mysql /var/log/haproxy /var/log/stunnel4 \
+                    /root/.pm2/logs 2>/dev/null || true
+
+                # ── 7. Suppression certificats SSL ──
+                echo -e "${YELLOW}  [7/12] Suppression des certificats SSL...${RESET}"
+                rm -rf /etc/letsencrypt /etc/ssl/kighmu 2>/dev/null || true
+
+                # ── 8. Suppression utilisateurs (système + SSH) ──
+                echo -e "${YELLOW}  [8/12] Suppression des utilisateurs...${RESET}"
+                for u in xray v2ray hysteria zivpn mysql; do
+                    userdel -r "$u" 2>/dev/null || true
+                done
+                awk -F: '$7~/bash|sh/ && $3>=1000{print $1}' /etc/passwd 2>/dev/null | while read -r u; do
+                    userdel -r "$u" 2>/dev/null || true
+                done
+                for g in xray v2ray hysteria zivpn kighmu; do
+                    groupdel "$g" 2>/dev/null || true
+                done
+
+                # ── 9. Nettoyage crontab + resolv.conf + sysctl ──
+                echo -e "${YELLOW}  [9/12] Nettoyage crontab, resolv, sysctl...${RESET}"
                 crontab -r 2>/dev/null || true
-                chattr -i /etc/resolv.conf 2>/dev/null || true; echo "nameserver 1.1.1.1" > /etc/resolv.conf; chattr +i /etc/resolv.conf 2>/dev/null || true
-                echo -e "${YELLOW}  Suppression des paquets...${RESET}"
-                apt-get remove --purge -y xray v2ray hysteria zivpn nginx haproxy mysql-server nodejs npm stunnel4 dropbear dnsdist certbot python3-certbot-nginx 2>/dev/null || true
-                apt-get autoremove --purge -y 2>/dev/null || true; apt-get autoclean 2>/dev/null || true
-                systemctl daemon-reload
-                echo -e "${GREEN}  ✓ Désinstallation COMPLÈTE terminée. VPS état d'origine.${RESET}"
-                echo -e "  ${YELLOW}Recommandé : reboot.${RESET}"
+                chattr -i /etc/resolv.conf 2>/dev/null || true
+                echo "nameserver 1.1.1.1" > /etc/resolv.conf
+                chattr +i /etc/resolv.conf 2>/dev/null || true
+                rm -f /etc/sysctl.d/99-v2ray.conf /etc/sysctl.d/99-slowdns.conf 2>/dev/null || true
+                sed -i '/^net\.core\.default_qdisc/d; /^net\.ipv4\.tcp_congestion_control/d; /^net\.ipv4\.tcp_notsent_lowat/d; /^net\.ipv4\.tcp_fastopen/d; /^fs\.file-max/d' /etc/sysctl.conf 2>/dev/null || true
+                sysctl -p 2>/dev/null || true
+
+                # ── 10. Suppression paquets ──
+                echo -e "${YELLOW}  [10/12] Suppression des paquets...${RESET}"
+                apt-get remove --purge -y \
+                    xray-server v2ray haproxy hysteria zivpn \
+                    nginx nginx-common nginx-core \
+                    mysql-server mysql-client mysql-common \
+                    nodejs npm stunnel4 dropbear dnsdist \
+                    certbot python3-certbot-nginx \
+                    nftables build-essential cmake \
+                    golang-go 2>/dev/null || true
+                apt-get autoremove --purge -y 2>/dev/null || true
+                apt-get autoclean 2>/dev/null || true
+                rm -f /etc/apt/sources.list.d/nodesource.list 2>/dev/null || true
+                apt-get update 2>/dev/null || true
+
+                # ── 11. Nettoyage temp + reliquats ──
+                echo -e "${YELLOW}  [11/12] Nettoyage des fichiers temporaires...${RESET}"
+                rm -rf /tmp/{Tyiop24,Kighmu,wstunnel_inst,xray_inst,panel.sh} 2>/dev/null || true
+                rm -f /root/install.sh /root/udp.sh /root/ssh.sh /root/xray-v2ray.sh /root/panel.sh 2>/dev/null || true
+                find /root -maxdepth 1 -name '*.sh' -o -name '*.tar.gz' -o -name '*.zip' 2>/dev/null | xargs rm -f 2>/dev/null || true
+                rm -rf /usr/local/lib/node_modules 2>/dev/null || true
+                rm -f /usr/local/bin/{pm2,node,npm,npx} 2>/dev/null || true
+
+                # ── 12. Rechargement systemd + message final ──
+                systemctl daemon-reload 2>/dev/null || true
+                echo
+                echo -e "${GREEN}  ╔═══════════════════════════════════════════════════════╗${RESET}"
+                echo -e "${GREEN}  ║${RESET}  ✓ Désinstallation COMPLÈTE terminée               ${GREEN}║${RESET}"
+                echo -e "${GREEN}  ║${RESET}  ${WHITE}VPS nettoyé — état d'origine${RESET}              ${GREEN}║${RESET}"
+                echo -e "${GREEN}  ║${RESET}  ${YELLOW}Recommandé : reboot${RESET}                      ${GREEN}║${RESET}"
+                echo -e "${GREEN}  ╚═══════════════════════════════════════════════════════╝${RESET}"
             else
                 echo -e "  ${YELLOW}Désinstallation annulée.${RESET}"
             fi; pause;;
