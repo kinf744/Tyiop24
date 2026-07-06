@@ -21,7 +21,13 @@ extract_web_panel() {
     "jsonwebtoken": "^9.0.2",
     "cors": "^2.8.5",
     "morgan": "^1.10.0",
-    "axios": "^1.6.0"
+    "axios": "^1.6.0",
+    "dotenv": "^16.4.5",
+    "uuid": "^9.0.1",
+    "helmet": "^7.1.0",
+    "express-rate-limit": "^7.1.5",
+    "node-cron": "^3.0.3",
+    "systeminformation": "^5.21.8"
   }
 }
 PKGEOF

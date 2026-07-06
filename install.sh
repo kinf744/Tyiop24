@@ -151,7 +151,7 @@ deploy_panel_files() {
         if [[ ! -f "$PANEL_DIR/package.json" ]]; then
             warn "Échec téléchargement panel.sh — création panel minimal"
             cat > "$PANEL_DIR/package.json" << 'EOF'
-{"name":"kighmu-panel","version":"4.0.0","private":true,"dependencies":{"express":"^4.18.2","mysql2":"^3.6.0","bcryptjs":"^2.4.3","jsonwebtoken":"^9.0.2","cors":"^2.8.5","morgan":"^1.10.0","axios":"^1.6.0"}}
+{"name":"kighmu-panel","version":"4.0.0","private":true,"dependencies":{"express":"^4.18.2","mysql2":"^3.6.0","bcryptjs":"^2.4.3","jsonwebtoken":"^9.0.2","cors":"^2.8.5","morgan":"^1.10.0","axios":"^1.6.0","dotenv":"^16.4.5","uuid":"^9.0.1","helmet":"^7.1.0","express-rate-limit":"^7.1.5","node-cron":"^3.0.3","systeminformation":"^5.21.8"}}
 EOF
             cat > "$PANEL_DIR/server.js" << 'EOF'
 const express=require('express');const app=express();app.get('/',(r,s)=>s.send('Kighmu Panel'));app.listen(3000);
@@ -195,7 +195,7 @@ ENVEOF
 # ── NPM + PM2 ──
 install_npm_panel() {
     step_header '📦  Modules Node.js  📦'
-    cd "$PANEL_DIR"
+    pushd "$PANEL_DIR" >/dev/null || return 1
     if [[ ! -d node_modules ]]; then
         NODE_OPTIONS="--dns-result-order=ipv4first" npm install --production --quiet 2>/dev/null || npm install --production --quiet 2>/dev/null || warn "npm install warnings"
         log "Modules installés"
@@ -206,6 +206,7 @@ install_npm_panel() {
     PM2_STARTUP=$(pm2 startup 2>/dev/null | grep "sudo" | head -1)
     eval "$PM2_STARTUP" >/dev/null 2>&1 || true
     log "Panel démarré"
+    popd >/dev/null || true
 }
 
 # ── ADMIN ──
@@ -400,7 +401,7 @@ deploy_control_panel() {
     step_header '🎛️  Panneau de Contrôle SSH  🎛️'
     mkdir -p /etc/kighmu /etc/kighmu-v2
     # Extraire le code du panneau depuis la fin de ce script (marqueurs PANEL_CODE)
-    sed -n '/^# PANEL_CODE_START$/,/^# PANEL_CODE_END$/p' "$0" | tail -n +2 | head -n -1 > /etc/kighmu-v2/panel.sh || {
+    sed -n '/^# PANEL_CODE_START$/,/^# PANEL_CODE_END$/p' "$SCRIPT_DIR/install.sh" | tail -n +2 | head -n -1 > /etc/kighmu-v2/panel.sh || {
         err "Extraction du panneau échouée"; return 1;
     }
     chmod +x /etc/kighmu-v2/panel.sh
