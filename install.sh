@@ -47,7 +47,7 @@ check_root() {
 show_banner() {
     echo -e "${CLR}${BG}"
     echo -e "${BG}${CYAN}╔═══$(printf '═%.0s' {1..67})═══╗${RESET}"
-    echo -e "${BG}${CYAN}║${RESET}${TITLE_BG}$(center '✨  KIGHMU PREMIUM VPN  ✨' 71)${RESET}${BG}${CYAN}║${RESET}"
+    echo -e "${BG}${CYAN}║${RESET}${TITLE_BG}$(center '  KIGHMU PREMIUM VPN  ' 71)${RESET}${BG}${CYAN}║${RESET}"
     echo -e "${BG}${CYAN}║${RESET}${TITLE_BG}$(center 'Installation Commerciale 4-en-1' 71)${RESET}${BG}${CYAN}║${RESET}"
     echo -e "${BG}${CYAN}╚═══$(printf '═%.0s' {1..67})═══╝${RESET}"
     echo
