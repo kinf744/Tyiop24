@@ -21,7 +21,7 @@ setup_colors
 log() { echo -e "${GREEN}[✓]${RESET} $*"; }
 warn() { echo -e "${YELLOW}[!]${RESET} $*"; }
 err() { echo -e "${RED}[✗]${RESET} $*"; }
-pause() { echo; read -rp "Appuyez sur Entrée..."; }
+pause() { [[ -n "${SKIP_PAUSE:-}" ]] && return 0; echo; read -rp "Appuyez sur Entrée..."; }
 check_root() { [[ $EUID -ne 0 ]] && { err "Root requis"; exit 1; } }
 
 # ================================================
@@ -124,13 +124,13 @@ zivpn_restore_from_db() {
 }
 
 install_zivpn() {
-    [[ zivpn_installed ]] && { warn "ZIVPN déjà installé"; return; }
+    zivpn_installed && { warn "ZIVPN déjà installé"; return; }
     echo "${CYAN}━━━ Installation ZIVPN ━━━${RESET}"
     systemctl stop zivpn 2>/dev/null || true
     apt-get install -y -qq wget curl jq openssl iproute2 2>/dev/null
     wget -q "https://github.com/kinf744/Kighmu/releases/download/v1.0.0/udp-zivpn-linux-amd64" -O "$ZIVPN_BIN"
     chmod +x "$ZIVPN_BIN"; mkdir -p /etc/zivpn
-    read -rp "Domaine ZIVPN [zivpn.local]: " DOMAIN; DOMAIN=${DOMAIN:-zivpn.local}
+    if [[ -n "${SKIP_PAUSE:-}" ]]; then DOMAIN="zivpn.local"; else read -rp "Domaine ZIVPN [zivpn.local]: " DOMAIN; DOMAIN=${DOMAIN:-zivpn.local}; fi
     echo "$DOMAIN" > /etc/zivpn/domain.txt
     openssl req -x509 -newkey rsa:2048 -keyout /etc/zivpn/zivpn.key -out /etc/zivpn/zivpn.crt -nodes -days 3650 -subj "/CN=$DOMAIN" 2>/dev/null
     chmod 600 /etc/zivpn/zivpn.key; chmod 644 /etc/zivpn/zivpn.crt
@@ -139,9 +139,25 @@ install_zivpn() {
 EOF
     cat > "/etc/systemd/system/$ZIVPN_SERVICE" << SVCEOF
 [Unit]
-Description=ZIVPN UDP Server (High-Speed); After=network-online.target; Wants=network-online.target; StartLimitIntervalSec=0
-[Service]; Type=simple; ExecStart=$ZIVPN_BIN server -c $ZIVPN_CONFIG; WorkingDirectory=/etc/zivpn; Restart=always; RestartSec=10; StartLimitBurst=0; AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_NET_RAW; LimitNOFILE=1048576; LimitNPROC=infinity; LimitMEMLOCK=infinity; StandardOutput=append:/var/log/zivpn.log; StandardError=append:/var/log/zivpn.log
-[Install]; WantedBy=multi-user.target
+Description=ZIVPN UDP Server (High-Speed)
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=0
+[Service]
+Type=simple
+ExecStart=$ZIVPN_BIN server -c $ZIVPN_CONFIG
+WorkingDirectory=/etc/zivpn
+Restart=always
+RestartSec=10
+StartLimitBurst=0
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_NET_RAW
+LimitNOFILE=1048576
+LimitNPROC=infinity
+LimitMEMLOCK=infinity
+StandardOutput=append:/var/log/zivpn.log
+StandardError=append:/var/log/zivpn.log
+[Install]
+WantedBy=multi-user.target
 SVCEOF
     systemctl daemon-reload && systemctl enable "$ZIVPN_SERVICE"
     deploy_nft_tunnel zivpn 'table inet zivpn { chain input { type filter hook input priority 0; policy accept; udp dport 5667 accept; udp dport 6000-19999 accept; }; chain prerouting { type nat hook prerouting priority -100; udp dport 6000-19999 dnat to :5667; }; }'
@@ -243,7 +259,7 @@ install_hysteria() {
     apt-get install -y -qq wget curl jq openssl iproute2 2>/dev/null
     wget -q "https://github.com/apernet/hysteria/releases/download/v1.3.4/hysteria-linux-amd64" -O "$HY_BIN"
     chmod +x "$HY_BIN"; mkdir -p /etc/hysteria
-    read -rp "Domaine Hysteria [hysteria.local]: " DOMAIN; DOMAIN=${DOMAIN:-hysteria.local}
+    if [[ -n "${SKIP_PAUSE:-}" ]]; then DOMAIN="hysteria.local"; else read -rp "Domaine Hysteria [hysteria.local]: " DOMAIN; DOMAIN=${DOMAIN:-hysteria.local}; fi
     echo "$DOMAIN" > /etc/hysteria/domain.txt
     openssl req -x509 -newkey rsa:2048 -keyout /etc/hysteria/hysteria.key -out /etc/hysteria/hysteria.crt -nodes -days 3650 -subj "/CN=$DOMAIN" 2>/dev/null
     chmod 600 /etc/hysteria/hysteria.key; chmod 644 /etc/hysteria/hysteria.crt
@@ -251,9 +267,26 @@ install_hysteria() {
 {"listen":":20000","cert":"/etc/hysteria/hysteria.crt","key":"/etc/hysteria/hysteria.key","obfs":"hysteria","up_mbps":150,"down_mbps":150,"recv_window_conn":33554432,"recv_window_client":67108864,"disable_mtu_discovery":false,"max_conn_client":4096,"exclude_port":[53,5300,4466,36712,5667,20000],"auth":{"mode":"passwords","config":["zi"]}}
 EOF
     cat > "/etc/systemd/system/$HY_SERVICE" << SVCEOF
-[Unit]; Description=HYSTERIA UDP Server (High-Speed); After=network-online.target; Wants=network-online.target; StartLimitIntervalSec=0
-[Service]; Type=simple; ExecStart=$HY_BIN server -c $HY_CONFIG; WorkingDirectory=/etc/hysteria; Restart=always; RestartSec=10; StartLimitBurst=0; AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_NET_RAW; LimitNOFILE=1048576; LimitNPROC=infinity; LimitMEMLOCK=infinity; StandardOutput=append:/var/log/hysteria.log; StandardError=append:/var/log/hysteria.log
-[Install]; WantedBy=multi-user.target
+[Unit]
+Description=HYSTERIA UDP Server (High-Speed)
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=0
+[Service]
+Type=simple
+ExecStart=$HY_BIN server -c $HY_CONFIG
+WorkingDirectory=/etc/hysteria
+Restart=always
+RestartSec=10
+StartLimitBurst=0
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_NET_RAW
+LimitNOFILE=1048576
+LimitNPROC=infinity
+LimitMEMLOCK=infinity
+StandardOutput=append:/var/log/hysteria.log
+StandardError=append:/var/log/hysteria.log
+[Install]
+WantedBy=multi-user.target
 SVCEOF
     systemctl daemon-reload && systemctl enable "$HY_SERVICE"
     deploy_nft_tunnel hysteria 'table inet hysteria { chain input { type filter hook input priority 0; policy accept; udp dport 20000 accept; udp dport 20000-50000 accept; }; chain prerouting { type nat hook prerouting priority -100; udp dport 20000-50000 dnat to :20000; }; }'
@@ -319,9 +352,18 @@ install_badvpn() {
     make -j"$(nproc)" >/dev/null 2>&1; cp udpgw/badvpn-udpgw /usr/local/bin/; chmod +x /usr/local/bin/badvpn-udpgw
     for port in 7100 7200 7300; do
         cat > "/etc/systemd/system/badvpn@${port}.service" << UNIT
-[Unit]; Description=BadVPN UDPGW $port; After=network.target
-[Service]; Type=simple; ExecStart=/usr/local/bin/badvpn-udpgw --listen-addr 127.0.0.1:$port --max-clients 2048; Restart=always; RestartSec=2; User=root; LimitNOFILE=1048576
-[Install]; WantedBy=multi-user.target
+[Unit]
+Description=BadVPN UDPGW $port
+After=network.target
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/badvpn-udpgw --listen-addr 127.0.0.1:$port --max-clients 2048
+Restart=always
+RestartSec=2
+User=root
+LimitNOFILE=1048576
+[Install]
+WantedBy=multi-user.target
 UNIT
         systemctl enable --now "badvpn@${port}.service" 2>/dev/null || true
     done
@@ -348,9 +390,23 @@ install_udp_custom() {
 {"listen":":36712","auth":{"mode":"passwords","config":["zi"]},"exclude_port":[53,5300,4466,5667,20000]}
 EOF
     cat > /etc/systemd/system/udp-custom.service << UNIT
-[Unit]; Description=UDP Custom Server; After=network-online.target; Wants=network-online.target; StartLimitIntervalSec=0
-[Service]; Type=simple; ExecStart=/usr/local/bin/udp-custom server -c /etc/udp-custom/config.json; WorkingDirectory=/etc/udp-custom; Restart=always; RestartSec=10; AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_NET_RAW; LimitNOFILE=1048576; StandardOutput=append:/var/log/udp-custom.log; StandardError=append:/var/log/udp-custom.log
-[Install]; WantedBy=multi-user.target
+[Unit]
+Description=UDP Custom Server
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=0
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/udp-custom server -c /etc/udp-custom/config.json
+WorkingDirectory=/etc/udp-custom
+Restart=always
+RestartSec=10
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_NET_RAW
+LimitNOFILE=1048576
+StandardOutput=append:/var/log/udp-custom.log
+StandardError=append:/var/log/udp-custom.log
+[Install]
+WantedBy=multi-user.target
 UNIT
     systemctl daemon-reload && systemctl enable --now udp-custom 2>/dev/null || true
     deploy_nft_tunnel udp-custom 'table inet udp-custom { chain input { type filter hook input priority 0; policy accept; udp dport 36712 accept; }; chain prerouting { type nat hook prerouting priority -100; udp dport 1-65535 dnat to :36712; }; }'
@@ -409,5 +465,7 @@ main_menu() {
     done
 }
 
-check_root
-main_menu
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    check_root
+    main_menu
+fi

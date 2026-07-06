@@ -19,7 +19,7 @@ setup_colors
 log() { echo -e "${GREEN}[✓]${RESET} $*"; }
 warn() { echo -e "${YELLOW}[!]${RESET} $*"; }
 err() { echo -e "${RED}[✗]${RESET} $*"; }
-pause() { echo; read -rp "Appuyez sur Entrée..."; }
+pause() { [[ -n "${SKIP_PAUSE:-}" ]] && return 0; echo; read -rp "Appuyez sur Entrée..."; }
 check_root() { [[ $EUID -ne 0 ]] && { err "Root requis"; exit 1; } }
 
 # ================================================
@@ -79,9 +79,19 @@ install_dropbear() {
     echo "Bienvenue sur Kighmu - Connexion autorisée" > "$DIR/banner.txt"
 
     cat > /etc/systemd/system/dropbear-custom.service << 'UNIT'
-[Unit]; Description=Dropbear Custom (port 109); After=network-online.target; Wants=network-online.target
-[Service]; Type=simple; ExecStart=/usr/local/sbin/dropbear -F -E -p 109 -w -g -b /etc/dropbear/banner.txt -R; Restart=always; RestartSec=2; User=root; LimitNOFILE=1048576
-[Install]; WantedBy=multi-user.target
+[Unit]
+Description=Dropbear Custom (port 109)
+After=network-online.target
+Wants=network-online.target
+[Service]
+Type=simple
+ExecStart=/usr/local/sbin/dropbear -F -E -p 109 -w -g -b /etc/dropbear/banner.txt -R
+Restart=always
+RestartSec=2
+User=root
+LimitNOFILE=1048576
+[Install]
+WantedBy=multi-user.target
 UNIT
     systemctl daemon-reload && systemctl enable --now dropbear-custom.service 2>/dev/null || true
     deploy_nft_tunnel dropbear 'table inet dropbear { chain input { type filter hook input priority 0; policy accept; tcp dport 109 accept; }; }'
@@ -109,9 +119,20 @@ install_ssl_tls() {
     install -m 0755 ssl_tls /usr/local/bin/ssl_tls; rm -rf "$tmp"
 
     cat > /etc/systemd/system/ssl_tls.service << 'UNIT'
-[Unit]; Description=Tunnel SSL/TLS (ssl_tls); After=network.target; Wants=network.target
-[Service]; Type=simple; ExecStart=/usr/local/bin/ssl_tls -listen 444 -target-host 127.0.0.1 -target-port 109; Restart=always; RestartSec=2; LimitNOFILE=1048576; StandardOutput=journal; StandardError=journal
-[Install]; WantedBy=multi-user.target
+[Unit]
+Description=Tunnel SSL/TLS (ssl_tls)
+After=network.target
+Wants=network.target
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/ssl_tls -listen 444 -target-host 127.0.0.1 -target-port 109
+Restart=always
+RestartSec=2
+LimitNOFILE=1048576
+StandardOutput=journal
+StandardError=journal
+[Install]
+WantedBy=multi-user.target
 UNIT
     systemctl daemon-reload && systemctl enable --now ssl_tls.service 2>/dev/null || true
     deploy_nft_tunnel ssl_tls 'table inet ssl_tls { chain input { type filter hook input priority 0; policy accept; tcp dport 444 accept; }; chain output { type filter hook output priority 0; policy accept; tcp sport 444 accept; }; }'
@@ -128,7 +149,7 @@ uninstall_ssl_tls() {
 # SSH WS (Slipstream)
 # ================================================
 install_sshws() {
-    echo "${CYAN}━━━ Installation SSH WS (port 80 → 109) ━━━${RESET}"
+    echo "${CYAN}━━━ Installation SSH WS (port 2086 → 109) ━━━${RESET}"
     command -v sshws &>/dev/null && { warn "sshws déjà installé"; pause; return; }
     local url="https://github.com/kinf744/Kighmu/releases/download/v1.0.0"
     local tmp; tmp=$(mktemp -d); cd "$tmp"
@@ -136,13 +157,22 @@ install_sshws() {
     install -m 0755 sshws /usr/local/bin/sshws; rm -rf "$tmp"
 
     cat > /etc/systemd/system/sshws.service << 'UNIT'
-[Unit]; Description=SSHWS Slipstream Tunnel; After=network.target
-[Service]; Type=simple; ExecStart=/usr/local/bin/sshws -listen 80 -target-host 127.0.0.1 -target-port 109; Restart=always; RestartSec=2; User=root; LimitNOFILE=1048576
-[Install]; WantedBy=multi-user.target
+[Unit]
+Description=SSHWS Slipstream Tunnel
+After=network.target
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/sshws -listen 2086 -target-host 127.0.0.1 -target-port 109
+Restart=always
+RestartSec=2
+User=root
+LimitNOFILE=1048576
+[Install]
+WantedBy=multi-user.target
 UNIT
     systemctl daemon-reload && systemctl enable --now sshws.service 2>/dev/null || true
-    deploy_nft_tunnel sshws 'table inet sshws { chain input { type filter hook input priority 0; policy accept; tcp dport 80 accept; }; }'
-    log "SSH WS actif (port 80 → 109)"; pause
+    deploy_nft_tunnel sshws 'table inet sshws { chain input { type filter hook input priority 0; policy accept; tcp dport 2086 accept; }; }'
+    log "SSH WS actif (port 2086 → 109)"; pause
 }
 
 uninstall_sshws() {
@@ -155,7 +185,7 @@ uninstall_sshws() {
 # WSTUNNEL (proxy--ws)
 # ================================================
 install_wstunnel() {
-    echo "${CYAN}━━━ Installation wstunnel (port 8880 → 22) ━━━${RESET}"
+    echo "${CYAN}━━━ Installation wstunnel (port 2082 → 22) ━━━${RESET}"
     command -v wstunnel &>/dev/null && { warn "wstunnel déjà installé"; pause; return; }
     apt-get install -y -qq wget 2>/dev/null
     rm -rf /tmp/wstunnel_inst; mkdir -p /tmp/wstunnel_inst; cd /tmp/wstunnel_inst
@@ -166,18 +196,31 @@ install_wstunnel() {
     cat > /usr/local/bin/proxy--ws << 'PROXYEOF'
 #!/usr/bin/env bash
 DOMAIN="${DOMAIN:-0.0.0.0}"
-exec /usr/local/bin/wstunnel server "ws://0.0.0.0:8880" --restrict-to "127.0.0.1:22"
+exec /usr/local/bin/wstunnel server "ws://0.0.0.0:2082" --restrict-to "127.0.0.1:22"
 PROXYEOF
     chmod +x /usr/local/bin/proxy--ws
 
     cat > /etc/systemd/system/proxy--ws.service << 'UNIT'
-[Unit]; Description=Proxy WebSocket SSH (wstunnel); After=network.target
-[Service]; Type=simple; User=root; ExecStart=/usr/local/bin/proxy--ws; Restart=always; RestartSec=5; StartLimitIntervalSec=0; KillMode=process; LimitNOFILE=1048576; StandardOutput=append:/var/log/proxy--ws.log; StandardError=append:/var/log/proxy--ws.err
-[Install]; WantedBy=multi-user.target
+[Unit]
+Description=Proxy WebSocket SSH (wstunnel)
+After=network.target
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/local/bin/proxy--ws
+Restart=always
+RestartSec=5
+StartLimitIntervalSec=0
+KillMode=process
+LimitNOFILE=1048576
+StandardOutput=append:/var/log/proxy--ws.log
+StandardError=append:/var/log/proxy--ws.err
+[Install]
+WantedBy=multi-user.target
 UNIT
     systemctl daemon-reload && systemctl enable --now proxy--ws.service 2>/dev/null || true
-    deploy_nft_tunnel proxy-ws 'table inet proxy-ws { chain input { type filter hook input priority 0; policy accept; tcp dport 8880 accept; }; }'
-    log "wstunnel actif (port 8880 → 22)"; pause
+    deploy_nft_tunnel proxy-ws 'table inet proxy-ws { chain input { type filter hook input priority 0; policy accept; tcp dport 2082 accept; }; }'
+    log "wstunnel actif (port 2082 → 22)"; pause
 }
 
 uninstall_wstunnel() {
@@ -202,9 +245,25 @@ install_sockspy() {
     wget -q -O /usr/local/bin/ws2_proxy.py "$url" 2>/dev/null; chmod +x /usr/local/bin/ws2_proxy.py
 
     cat > /etc/systemd/system/socks_python_ws.service << 'UNIT'
-[Unit]; Description=Proxy SOCKS/Python WS; After=network-online.target; Wants=network-online.target
-[Service]; Type=simple; User=root; ExecStart=/usr/local/bin/ws2_proxy.py 9090; Restart=always; RestartSec=5; StandardOutput=journal; StandardError=journal; SyslogIdentifier=sockspy; LimitNOFILE=1048576; Nice=-5; CPUSchedulingPolicy=fifo; CPUSchedulingPriority=99
-[Install]; WantedBy=multi-user.target
+[Unit]
+Description=Proxy SOCKS/Python WS
+After=network-online.target
+Wants=network-online.target
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/local/bin/ws2_proxy.py 9090
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=sockspy
+LimitNOFILE=1048576
+Nice=-5
+CPUSchedulingPolicy=fifo
+CPUSchedulingPriority=99
+[Install]
+WantedBy=multi-user.target
 UNIT
     systemctl daemon-reload && systemctl enable --now socks_python_ws.service 2>/dev/null || true
     deploy_nft_tunnel sockspy 'table inet sockspy { chain input { type filter hook input priority 0; policy accept; tcp dport 9090 accept; }; }'
@@ -225,7 +284,7 @@ install_socks_python() {
     echo "${CYAN}━━━ Installation SOCKS Python Direct ━━━${RESET}"
     command -v KIGHMUPROXY.py &>/dev/null && { warn "SOCKS Python déjà installé"; pause; return; }
     mkdir -p /etc/socks_python
-    read -rp "Port (1024-65535) [9050]: " PORT; PORT=${PORT:-9050}
+    if [[ -n "${SKIP_PAUSE:-}" ]]; then PORT=9050; else read -rp "Port (1024-65535) [9050]: " PORT; PORT=${PORT:-9050}; fi
     [[ "$PORT" -lt 1024 || "$PORT" -gt 65535 ]] && { err "Port invalide"; pause; return; }
     echo "$PORT" > /etc/socks_python/socks_port.conf
     python3 -c "import socks" &>/dev/null || apt-get install -y -qq python3-socks 2>/dev/null || {
@@ -236,9 +295,21 @@ install_socks_python() {
     wget -q -O /usr/local/bin/KIGHMUPROXY.py "$url" 2>/dev/null; chmod +x /usr/local/bin/KIGHMUPROXY.py
 
     cat > /etc/systemd/system/socks_python.service << UNIT
-[Unit]; Description=Proxy SOCKS Python; After=network.target network-online.target; Wants=network-online.target
-[Service]; Type=simple; User=root; ExecStart=/usr/bin/python3 /usr/local/bin/KIGHMUPROXY.py $PORT; Restart=always; RestartSec=5; StandardOutput=journal; StandardError=journal; SyslogIdentifier=socks-python-proxy
-[Install]; WantedBy=multi-user.target
+[Unit]
+Description=Proxy SOCKS Python
+After=network.target network-online.target
+Wants=network-online.target
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/bin/python3 /usr/local/bin/KIGHMUPROXY.py $PORT
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=socks-python-proxy
+[Install]
+WantedBy=multi-user.target
 UNIT
     systemctl daemon-reload && systemctl enable --now socks_python.service 2>/dev/null || true
     deploy_nft_tunnel socks-python "table inet socks-python { chain input { type filter hook input priority 0; policy accept; tcp dport ${PORT} accept; }; }"
@@ -259,23 +330,480 @@ install_ws_services() {
     echo "${CYAN}━━━ Installation WS Dropbear (2095) + WS Stunnel (700) ━━━${RESET}"
     apt-get install -y -qq python3 python3-pip nginx certbot python3-certbot-nginx stunnel4 wget 2>/dev/null
     python3 -m pip install --upgrade pip websockets >/dev/null 2>&1 || true
-    local base="https://raw.githubusercontent.com/kinf744/Kighmu/main"
-    wget -q -O /usr/local/bin/ws-dropbear "$base/ws-dropbear" 2>/dev/null || true
-    wget -q -O /usr/local/bin/ws-stunnel "$base/ws-stunnel" 2>/dev/null || true
-    chmod +x /usr/local/bin/ws-dropbear /usr/local/bin/ws-stunnel 2>/dev/null || true
+    rm -f /usr/local/bin/ws-dropbear /usr/local/bin/ws-stunnel
+    cat > /usr/local/bin/ws-dropbear << 'PYEOF'
+#!/usr/bin/env python3
+import socket, threading, select, signal, sys, time, getopt
+
+LISTENING_ADDR = '0.0.0.0'
+LISTENING_PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 2095
+PASS = ''
+BUFLEN = 4096 * 4
+TIMEOUT = 60
+DEFAULT_HOST = '127.0.0.1:109'
+RESPONSE = 'HTTP/1.1 101 <b><i><font color="green">WELCOME TO NETWORK TWEAKER</font></b>\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: foo\r\n\r\n'
+
+class Server(threading.Thread):
+    def __init__(self, host, port):
+        threading.Thread.__init__(self)
+        self.running = False
+        self.host = host
+        self.port = port
+        self.threads = []
+        self.threadsLock = threading.Lock()
+        self.logLock = threading.Lock()
+
+    def run(self):
+        self.soc = socket.socket(socket.AF_INET)
+        self.soc.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.soc.settimeout(2)
+        self.soc.bind((self.host, self.port))
+        self.soc.listen(0)
+        self.running = True
+        try:
+            while self.running:
+                try:
+                    c, addr = self.soc.accept()
+                    c.setblocking(1)
+                except socket.timeout:
+                    continue
+                conn = ConnectionHandler(c, self, addr)
+                conn.start()
+                self.addConn(conn)
+        finally:
+            self.running = False
+            self.soc.close()
+
+    def printLog(self, log):
+        self.logLock.acquire()
+        print(log)
+        self.logLock.release()
+
+    def addConn(self, conn):
+        try:
+            self.threadsLock.acquire()
+            if self.running:
+                self.threads.append(conn)
+        finally:
+            self.threadsLock.release()
+
+    def removeConn(self, conn):
+        try:
+            self.threadsLock.acquire()
+            self.threads.remove(conn)
+        finally:
+            self.threadsLock.release()
+
+    def close(self):
+        try:
+            self.running = False
+            self.threadsLock.acquire()
+            threads = list(self.threads)
+            for c in threads:
+                c.close()
+        finally:
+            self.threadsLock.release()
+
+class ConnectionHandler(threading.Thread):
+    def __init__(self, socClient, server, addr):
+        threading.Thread.__init__(self)
+        self.clientClosed = False
+        self.targetClosed = True
+        self.client = socClient
+        self.client_buffer = b''
+        self.server = server
+        self.log = 'Connection: ' + str(addr)
+
+    def close(self):
+        try:
+            if not self.clientClosed:
+                self.client.shutdown(socket.SHUT_RDWR)
+                self.client.close()
+        except:
+            pass
+        finally:
+            self.clientClosed = True
+        try:
+            if not self.targetClosed:
+                self.target.shutdown(socket.SHUT_RDWR)
+                self.target.close()
+        except:
+            pass
+        finally:
+            self.targetClosed = True
+
+    def run(self):
+        try:
+            self.client_buffer = self.client.recv(BUFLEN)
+            hostPort = self.findHeader(self.client_buffer, 'X-Real-Host')
+            if hostPort == '':
+                hostPort = DEFAULT_HOST
+            split = self.findHeader(self.client_buffer, 'X-Split')
+            if split != '':
+                self.client.recv(BUFLEN)
+            if hostPort != '':
+                passwd = self.findHeader(self.client_buffer, 'X-Pass')
+                if len(PASS) != 0 and passwd == PASS:
+                    self.method_CONNECT(hostPort)
+                elif len(PASS) != 0 and passwd != PASS:
+                    self.client.send(b'HTTP/1.1 400 WrongPass!\r\n\r\n')
+                elif hostPort.startswith('127.0.0.1') or hostPort.startswith('localhost'):
+                    self.method_CONNECT(hostPort)
+                else:
+                    self.client.send(b'HTTP/1.1 403 Forbidden!\r\n\r\n')
+            else:
+                print('- No X-Real-Host!')
+                self.client.send(b'HTTP/1.1 400 NoXRealHost!\r\n\r\n')
+        except Exception as e:
+            self.log += ' - error: ' + str(e)
+            self.server.printLog(self.log)
+        finally:
+            self.close()
+            self.server.removeConn(self)
+
+    def findHeader(self, head, header):
+        h = header.encode()
+        aux = head.find(h + b': ')
+        if aux == -1:
+            return ''
+        aux = head.find(b':', aux)
+        head = head[aux+2:]
+        aux = head.find(b'\r\n')
+        if aux == -1:
+            return ''
+        return head[:aux].decode()
+
+    def connect_target(self, host):
+        i = host.find(':')
+        if i != -1:
+            port = int(host[i+1:])
+            host = host[:i]
+        else:
+            port = int(sys.argv[1]) if len(sys.argv) > 1 else 2095
+        (soc_family, soc_type, proto, _, address) = socket.getaddrinfo(host, port)[0]
+        self.target = socket.socket(soc_family, soc_type, proto)
+        self.targetClosed = False
+        self.target.connect(address)
+
+    def method_CONNECT(self, path):
+        self.log += ' - CONNECT ' + path
+        self.connect_target(path)
+        self.client.sendall(RESPONSE.encode())
+        self.client_buffer = b''
+        self.server.printLog(self.log)
+        self.doCONNECT()
+
+    def doCONNECT(self):
+        socs = [self.client, self.target]
+        count = 0
+        while True:
+            count += 1
+            try:
+                (recv, _, err) = select.select(socs, [], socs, 3)
+            except:
+                break
+            if err:
+                break
+            if recv:
+                for in_ in recv:
+                    try:
+                        data = in_.recv(BUFLEN)
+                        if data:
+                            if in_ is self.target:
+                                self.client.send(data)
+                            else:
+                                while data:
+                                    byte = self.target.send(data)
+                                    data = data[byte:]
+                            count = 0
+                        else:
+                            return
+                    except:
+                        return
+
+def main(host=LISTENING_ADDR, port=LISTENING_PORT):
+    print("\n:-------PythonProxy-------:\n")
+    print("Listening addr: " + LISTENING_ADDR)
+    print("Listening port: " + str(LISTENING_PORT) + "\n")
+    print(":-------------------------:\n")
+    server = Server(LISTENING_ADDR, LISTENING_PORT)
+    server.start()
+    while True:
+        try:
+            time.sleep(2)
+        except KeyboardInterrupt:
+            print('Stopping...')
+            server.close()
+            break
+
+if __name__ == '__main__':
+    main()
+PYEOF
+    cat > /usr/local/bin/ws-stunnel << 'PYEOF2'
+#!/usr/bin/env python3
+import socket, threading, select, signal, sys, time, getopt
+
+LISTENING_ADDR = '127.0.0.1'
+LISTENING_PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 700
+PASS = ''
+BUFLEN = 4096 * 4
+TIMEOUT = 60
+DEFAULT_HOST = '127.0.0.1:69'
+RESPONSE = 'HTTP/1.1 101 <b><i><font color="green">WELCOME TO NETWORK TWEAKER</font></b>\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: foo\r\n\r\n'
+
+class Server(threading.Thread):
+    def __init__(self, host, port):
+        threading.Thread.__init__(self)
+        self.running = False
+        self.host = host
+        self.port = port
+        self.threads = []
+        self.threadsLock = threading.Lock()
+        self.logLock = threading.Lock()
+
+    def run(self):
+        self.soc = socket.socket(socket.AF_INET)
+        self.soc.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.soc.settimeout(2)
+        self.soc.bind((self.host, self.port))
+        self.soc.listen(0)
+        self.running = True
+        try:
+            while self.running:
+                try:
+                    c, addr = self.soc.accept()
+                    c.setblocking(1)
+                except socket.timeout:
+                    continue
+                conn = ConnectionHandler(c, self, addr)
+                conn.start()
+                self.addConn(conn)
+        finally:
+            self.running = False
+            self.soc.close()
+
+    def printLog(self, log):
+        self.logLock.acquire()
+        print(log)
+        self.logLock.release()
+
+    def addConn(self, conn):
+        try:
+            self.threadsLock.acquire()
+            if self.running:
+                self.threads.append(conn)
+        finally:
+            self.threadsLock.release()
+
+    def removeConn(self, conn):
+        try:
+            self.threadsLock.acquire()
+            self.threads.remove(conn)
+        finally:
+            self.threadsLock.release()
+
+    def close(self):
+        try:
+            self.running = False
+            self.threadsLock.acquire()
+            threads = list(self.threads)
+            for c in threads:
+                c.close()
+        finally:
+            self.threadsLock.release()
+
+class ConnectionHandler(threading.Thread):
+    def __init__(self, socClient, server, addr):
+        threading.Thread.__init__(self)
+        self.clientClosed = False
+        self.targetClosed = True
+        self.client = socClient
+        self.client_buffer = b''
+        self.server = server
+        self.log = 'Connection: ' + str(addr)
+
+    def close(self):
+        try:
+            if not self.clientClosed:
+                self.client.shutdown(socket.SHUT_RDWR)
+                self.client.close()
+        except:
+            pass
+        finally:
+            self.clientClosed = True
+        try:
+            if not self.targetClosed:
+                self.target.shutdown(socket.SHUT_RDWR)
+                self.target.close()
+        except:
+            pass
+        finally:
+            self.targetClosed = True
+
+    def run(self):
+        try:
+            self.client_buffer = self.client.recv(BUFLEN)
+            hostPort = self.findHeader(self.client_buffer, 'X-Real-Host')
+            if hostPort == '':
+                hostPort = DEFAULT_HOST
+            split = self.findHeader(self.client_buffer, 'X-Split')
+            if split != '':
+                self.client.recv(BUFLEN)
+            if hostPort != '':
+                passwd = self.findHeader(self.client_buffer, 'X-Pass')
+                if len(PASS) != 0 and passwd == PASS:
+                    self.method_CONNECT(hostPort)
+                elif len(PASS) != 0 and passwd != PASS:
+                    self.client.send(b'HTTP/1.1 400 WrongPass!\r\n\r\n')
+                elif hostPort.startswith('127.0.0.1') or hostPort.startswith('localhost'):
+                    self.method_CONNECT(hostPort)
+                else:
+                    self.client.send(b'HTTP/1.1 403 Forbidden!\r\n\r\n')
+            else:
+                print('- No X-Real-Host!')
+                self.client.send(b'HTTP/1.1 400 NoXRealHost!\r\n\r\n')
+        except Exception as e:
+            self.log += ' - error: ' + str(e)
+            self.server.printLog(self.log)
+        finally:
+            self.close()
+            self.server.removeConn(self)
+
+    def findHeader(self, head, header):
+        h = header.encode()
+        aux = head.find(h + b': ')
+        if aux == -1:
+            return ''
+        aux = head.find(b':', aux)
+        head = head[aux+2:]
+        aux = head.find(b'\r\n')
+        if aux == -1:
+            return ''
+        return head[:aux].decode()
+
+    def connect_target(self, host):
+        i = host.find(':')
+        if i != -1:
+            port = int(host[i+1:])
+            host = host[:i]
+        else:
+            port = int(sys.argv[1]) if len(sys.argv) > 1 else 700
+        (soc_family, soc_type, proto, _, address) = socket.getaddrinfo(host, port)[0]
+        self.target = socket.socket(soc_family, soc_type, proto)
+        self.targetClosed = False
+        self.target.connect(address)
+
+    def method_CONNECT(self, path):
+        self.log += ' - CONNECT ' + path
+        self.connect_target(path)
+        self.client.sendall(RESPONSE.encode())
+        self.client_buffer = b''
+        self.server.printLog(self.log)
+        self.doCONNECT()
+
+    def doCONNECT(self):
+        socs = [self.client, self.target]
+        count = 0
+        while True:
+            count += 1
+            try:
+                (recv, _, err) = select.select(socs, [], socs, 3)
+            except:
+                break
+            if err:
+                break
+            if recv:
+                for in_ in recv:
+                    try:
+                        data = in_.recv(BUFLEN)
+                        if data:
+                            if in_ is self.target:
+                                self.client.send(data)
+                            else:
+                                while data:
+                                    byte = self.target.send(data)
+                                    data = data[byte:]
+                            count = 0
+                        else:
+                            return
+                    except:
+                        return
+
+def main(host=LISTENING_ADDR, port=LISTENING_PORT):
+    print("\n:-------PythonProxy-------:\n")
+    print("Listening addr: " + LISTENING_ADDR)
+    print("Listening port: " + str(LISTENING_PORT) + "\n")
+    print(":-------------------------:\n")
+    server = Server(LISTENING_ADDR, LISTENING_PORT)
+    server.start()
+    while True:
+        try:
+            time.sleep(2)
+        except KeyboardInterrupt:
+            print('Stopping...')
+            server.close()
+            break
+
+if __name__ == '__main__':
+    main()
+PYEOF2
+    chmod +x /usr/local/bin/ws-dropbear /usr/local/bin/ws-stunnel
 
     cat > /etc/systemd/system/ws-dropbear.service << 'UNIT'
-[Unit]; Description=Websocket-Dropbear; After=network.target
-[Service]; Type=simple; User=root; ExecStart=/usr/bin/python3 -O /usr/local/bin/ws-dropbear 2095; Restart=always; RestartSec=3s; LimitNOFILE=1048576
-[Install]; WantedBy=multi-user.target
+[Unit]
+Description=Websocket-Dropbear
+After=network.target
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/bin/python3 -O /usr/local/bin/ws-dropbear 2095
+Restart=always
+RestartSec=3s
+LimitNOFILE=1048576
+[Install]
+WantedBy=multi-user.target
 UNIT
     cat > /etc/systemd/system/ws-stunnel.service << 'UNIT2'
-[Unit]; Description=WS Stunnel HTTPS; After=network.target
-[Service]; Type=simple; User=root; ExecStart=/usr/bin/python3 -O /usr/local/bin/ws-stunnel 700; Restart=always; RestartSec=3s; LimitNOFILE=1048576
-[Install]; WantedBy=multi-user.target
+[Unit]
+Description=WS Stunnel HTTPS
+After=network.target
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/bin/python3 -O /usr/local/bin/ws-stunnel 700
+Restart=always
+RestartSec=3s
+LimitNOFILE=1048576
+[Install]
+WantedBy=multi-user.target
 UNIT2
     systemctl daemon-reload
     systemctl enable --now ws-dropbear ws-stunnel 2>/dev/null || true
+
+    if [[ -f /etc/nginx/sites-available/kighmu ]] && ! grep -q 'ws-dropbear' /etc/nginx/sites-available/kighmu 2>/dev/null; then
+        sed -i '/listen 8585;/a\
+\
+    location /ws-dropbear {\
+        proxy_pass http://127.0.0.1:2095;\
+        proxy_http_version 1.1;\
+        proxy_set_header Upgrade $http_upgrade;\
+        proxy_set_header Connection "upgrade";\
+        proxy_set_header Host $host;\
+        proxy_set_header X-Real-IP $remote_addr;\
+        proxy_read_timeout 86400;\
+    }\
+\
+    location /ws-stunnel {\
+        proxy_pass http://127.0.0.1:700;\
+        proxy_http_version 1.1;\
+        proxy_set_header Upgrade $http_upgrade;\
+        proxy_set_header Connection "upgrade";\
+        proxy_set_header Host $host;\
+        proxy_set_header X-Real-IP $remote_addr;\
+        proxy_read_timeout 86400;\
+    }' /etc/nginx/sites-available/kighmu
+        nginx -t 2>/dev/null && systemctl reload nginx 2>/dev/null || true
+    fi
     log "WS Dropbear (2095) + WS Stunnel (700) actifs"; pause
 }
 
@@ -308,29 +836,50 @@ install_slowdns() {
     mv "$tmp" /usr/local/bin/dnstt-server; chmod +x /usr/local/bin/dnstt-server
 
     local NS4 NV4
-    read -rp "NS4 (ex: ns4.votre-domaine.com): " NS4; NS4=${NS4:-ns4.kighmu.local}
-    read -rp "NV4 (ex: vps-ns4.votre-domaine.com): " NV4; NV4=${NV4:-vps-ns4.kighmu.local}
-    echo "NS4=$NS4" > "$DIR/ns.conf"; echo "NV4=$NV4" >> "$DIR/ns.conf"
+    NS4=$(head -1 "$DIR/ns.conf" 2>/dev/null || echo "")
+    NV4=$(head -1 "$DIR/nv4/ns.conf" 2>/dev/null || echo "")
+    [[ -n "$NS4" && "$NS4" == *"."* ]] || NS4=""
+    [[ -n "$NV4" && "$NV4" == *"."* ]] || NV4=""
+    if [[ -z "$NS4" ]]; then
+        read -rp "NS4 (ex: ns4.votre-domaine.com): " NS4; NS4=${NS4:-ns4.kighmu.local}
+    fi
+    if [[ -z "$NV4" ]]; then
+        read -rp "NV4 (ex: vps-ns4.votre-domaine.com): " NV4; NV4=${NV4:-vps-ns4.kighmu.local}
+    fi
+    echo "$NS4" > "$DIR/ns.conf"
+    echo "$NV4" > "$DIR/nv4/ns.conf"
 
     cat > /usr/local/bin/slowdns-ns4-start.sh << STARTEOF
 #!/bin/bash
-NS=\$(cat $DIR/ns.conf | grep NS4 | cut -d= -f2)
+NS=\$(cat $DIR/ns.conf)
 exec /usr/local/bin/dnstt-server -udp 0.0.0.0:5353 -privkey-file $DIR/server.key \$NS 127.0.0.1:109
 STARTEOF
     chmod +x /usr/local/bin/slowdns-ns4-start.sh
 
     cat > /usr/local/bin/slowdns-nv4-start.sh << STARTEOF
 #!/bin/bash
-NV4=\$(cat $DIR/ns.conf | grep NV4 | cut -d= -f2)
+NV4=\$(cat $DIR/nv4/ns.conf)
 exec /usr/local/bin/dnstt-server -udp 0.0.0.0:5354 -privkey-file $DIR/server.key \$NV4 127.0.0.1:5401
 STARTEOF
     chmod +x /usr/local/bin/slowdns-nv4-start.sh
 
     for svc in slowdns-ns4 slowdns-nv4; do
         cat > "/etc/systemd/system/${svc}.service" << UNIT
-[Unit]; Description=SlowDNS $svc; After=network-online.target; Wants=network-online.target
-[Service]; Type=simple; ExecStartPre=/bin/sleep 5; ExecStart=/usr/local/bin/${svc}-start.sh; Restart=always; RestartSec=5; LimitNOFILE=1048576; StandardOutput=append:/var/log/slowdns/${svc}.log; StandardError=append:/var/log/slowdns/${svc}.log
-[Install]; WantedBy=multi-user.target
+[Unit]
+Description=SlowDNS $svc
+After=network-online.target
+Wants=network-online.target
+[Service]
+Type=simple
+ExecStartPre=/bin/sleep 5
+ExecStart=/usr/local/bin/${svc}-start.sh
+Restart=always
+RestartSec=5
+LimitNOFILE=1048576
+StandardOutput=append:/var/log/slowdns/${svc}.log
+StandardError=append:/var/log/slowdns/${svc}.log
+[Install]
+WantedBy=multi-user.target
 UNIT
         systemctl daemon-reload && systemctl enable --now "${svc}.service" 2>/dev/null || true
     done
@@ -395,7 +944,7 @@ main_menu() {
         echo
         echo "${WHITE}5. SSH WS (80)${RESET}       ${GREEN}[5a]${RESET} Installer    ${GREEN}[5e]${RESET} Désinstaller"
         echo
-        echo "${WHITE}6. wstunnel (8880)${RESET}   ${GREEN}[6a]${RESET} Installer    ${GREEN}[6e]${RESET} Désinstaller"
+        echo "${WHITE}6. wstunnel (2082)${RESET}   ${GREEN}[6a]${RESET} Installer    ${GREEN}[6e]${RESET} Désinstaller"
         echo
         echo "${WHITE}7. SOCKS WS (9090)${RESET}   ${GREEN}[7a]${RESET} Installer    ${GREEN}[7e]${RESET} Désinstaller"
         echo
@@ -423,5 +972,7 @@ main_menu() {
     done
 }
 
-check_root
-main_menu
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    check_root
+    main_menu
+fi

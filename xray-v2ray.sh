@@ -21,7 +21,7 @@ setup_colors
 log() { echo -e "${GREEN}[✓]${RESET} $*"; }
 warn() { echo -e "${YELLOW}[!]${RESET} $*"; }
 err() { echo -e "${RED}[✗]${RESET} $*"; }
-pause() { echo; read -rp "Appuyez sur Entrée..."; }
+pause() { [[ -n "${SKIP_PAUSE:-}" ]] && return 0; echo; read -rp "Appuyez sur Entrée..."; }
 check_root() { [[ $EUID -ne 0 ]] && { err "Root requis"; exit 1; } }
 
 gen_uuid() { cat /proc/sys/kernel/random/uuid 2>/dev/null || uuidgen 2>/dev/null || echo "$(date +%s)-$$-$(openssl rand -hex 4)"; }
@@ -139,23 +139,40 @@ frontend xray-advanced
     default_backend xray-vless-xhttp
 
 # Backends
-backend xray-vmess-tcp;  server s1 127.0.0.1:10001 send-proxy
-backend xray-vmess-ws;   server s1 127.0.0.1:10002
-backend xray-vmess-tls;  server s1 127.0.0.1:10003
-backend xray-vmess-wss;  server s1 127.0.0.1:10004
-backend xray-vless-tcp;  server s1 127.0.0.1:10005 send-proxy
-backend xray-vless-ws;   server s1 127.0.0.1:10006
-backend xray-vless-tls;  server s1 127.0.0.1:10007
-backend xray-vless-main-wss; server s1 127.0.0.1:10008
-backend xray-trojan-tcp; server s1 127.0.0.1:10009
-backend xray-trojan-ws;  server s1 127.0.0.1:10010
-backend xray-ss;         server s1 127.0.0.1:10011
-backend xray-vless-xhttp; server s1 127.0.0.1:10012
-backend xray-vless-grpc;  server s1 127.0.0.1:10013
-backend xray-vmess-xhttp; server s1 127.0.0.1:10014
-backend xray-vmess-grpc;  server s1 127.0.0.1:10015
-backend xray-trojan-xhttp; server s1 127.0.0.1:10016
-backend xray-trojan-grpc;  server s1 127.0.0.1:10017
+backend xray-vmess-tcp
+    server s1 127.0.0.1:10001 send-proxy
+backend xray-vmess-ws
+    server s1 127.0.0.1:10002
+backend xray-vmess-tls
+    server s1 127.0.0.1:10003
+backend xray-vmess-wss
+    server s1 127.0.0.1:10004
+backend xray-vless-tcp
+    server s1 127.0.0.1:10005 send-proxy
+backend xray-vless-ws
+    server s1 127.0.0.1:10006
+backend xray-vless-tls
+    server s1 127.0.0.1:10007
+backend xray-vless-main-wss
+    server s1 127.0.0.1:10008
+backend xray-trojan-tcp
+    server s1 127.0.0.1:10009
+backend xray-trojan-ws
+    server s1 127.0.0.1:10010
+backend xray-ss
+    server s1 127.0.0.1:10011
+backend xray-vless-xhttp
+    server s1 127.0.0.1:10012
+backend xray-vless-grpc
+    server s1 127.0.0.1:10013
+backend xray-vmess-xhttp
+    server s1 127.0.0.1:10014
+backend xray-vmess-grpc
+    server s1 127.0.0.1:10015
+backend xray-trojan-xhttp
+    server s1 127.0.0.1:10016
+backend xray-trojan-grpc
+    server s1 127.0.0.1:10017
 HAPEOF
 }
 
@@ -167,7 +184,7 @@ install_xray() {
     systemctl stop nginx haproxy xray 2>/dev/null || true
 
     local IP DOMAIN; IP=$(hostname -I | awk '{print $1}')
-    read -rp "Domaine (pour TLS): " DOMAIN; DOMAIN=${DOMAIN:-$IP}
+    if [[ -n "${SKIP_PAUSE:-}" ]]; then DOMAIN="$IP"; else read -rp "Domaine (pour TLS): " DOMAIN; DOMAIN=${DOMAIN:-$IP}; fi
     echo "$DOMAIN" > "$XRAY_DOMAIN"
 
     # Xray binary
@@ -205,9 +222,22 @@ ACME
 
     # Xray systemd
     cat > /etc/systemd/system/xray.service << 'XSVCEOF'
-[Unit]; Description=Xray Service; After=network-online.target nss-lookup.target; Wants=network-online.target; StartLimitIntervalSec=0
-[Service]; User=root; CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE; AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE; NoNewPrivileges=true; ExecStart=/usr/local/bin/xray -config /etc/xray/config.json; Restart=always; RestartSec=5s; LimitNOFILE=1048576
-[Install]; WantedBy=multi-user.target
+[Unit]
+Description=Xray Service
+After=network-online.target nss-lookup.target
+Wants=network-online.target
+StartLimitIntervalSec=0
+[Service]
+User=root
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
+NoNewPrivileges=true
+ExecStart=/usr/local/bin/xray -config /etc/xray/config.json
+Restart=always
+RestartSec=5s
+LimitNOFILE=1048576
+[Install]
+WantedBy=multi-user.target
 XSVCEOF
 
     mkdir -p /etc/systemd/system/nginx.service.d /etc/systemd/system/haproxy.service.d
@@ -345,7 +375,7 @@ install_v2ray() {
     rm -rf /tmp/v2ray; unzip -o "$tmp" -d /tmp/v2ray >/dev/null 2>&1
     mv /tmp/v2ray/v2ray "$V2RAY_BIN"; chmod +x "$V2RAY_BIN"; mkdir -p /etc/v2ray
 
-    read -rp "Domaine: " DOMAIN; DOMAIN=${DOMAIN:-$(hostname -I | awk '{print $1}')}
+    if [[ -n "${SKIP_PAUSE:-}" ]]; then DOMAIN=$(hostname -I | awk '{print $1}'); else read -rp "Domaine: " DOMAIN; DOMAIN=${DOMAIN:-$(hostname -I | awk '{print $1}')}; fi
     echo "$DOMAIN" > /etc/v2ray/domain.txt
 
     # Kernel tuning
@@ -382,9 +412,24 @@ V2CONFEOF
     echo '{"vless":[]}' > /etc/v2ray/users.json
 
     cat > /etc/systemd/system/v2ray.service << 'V2SVCEOF'
-[Unit]; Description=V2Ray Service; After=network-online.target; Wants=network-online.target; StartLimitIntervalSec=0
-[Service]; Type=simple; User=root; ExecStart=/usr/local/bin/v2ray run -config /etc/v2ray/config.json; Restart=always; RestartSec=5; StartLimitBurst=0; LimitNOFILE=65536; KillMode=process; KillSignal=SIGTERM; TimeoutStopSec=10
-[Install]; WantedBy=multi-user.target
+[Unit]
+Description=V2Ray Service
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=0
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/local/bin/v2ray run -config /etc/v2ray/config.json
+Restart=always
+RestartSec=5
+StartLimitBurst=0
+LimitNOFILE=65536
+KillMode=process
+KillSignal=SIGTERM
+TimeoutStopSec=10
+[Install]
+WantedBy=multi-user.target
 V2SVCEOF
 
     systemctl daemon-reload && systemctl enable --now v2ray 2>/dev/null || true
@@ -474,5 +519,7 @@ main_menu() {
     done
 }
 
-check_root
-main_menu
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    check_root
+    main_menu
+fi

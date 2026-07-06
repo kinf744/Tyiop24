@@ -211,9 +211,19 @@ install_npm_panel() {
 
 # ── ADMIN ──
 create_admin_user() {
-    step_header '👤  Administrateur  👤'
-    local user="admin" pass
-    pass=$(gen_pass 12)
+    step_header '👤  Administrateur Panel  👤'
+    local user pass
+    if [[ -z "${SKIP_PAUSE:-}" ]]; then
+        echo -e "${BG}  ${LAV}Création du compte administrateur pour le Panel Web${RESET}"
+        echo
+        echo -ne "${BG}${WHITE}  Nom d'utilisateur [${CYAN}admin${WHITE}] : ${RESET}"; read -r user
+        user=${user:-admin}
+        echo -ne "${BG}${WHITE}  Mot de passe (${YELLOW}vide = auto${WHITE}) : ${RESET}"; read -rs pass; echo
+        pass=${pass:-$(gen_pass 12)}
+    else
+        user="admin"
+        pass=$(gen_pass 12)
+    fi
     node -e "
     const mysql = require('mysql2/promise');
     const bcrypt = require('bcryptjs');
@@ -224,8 +234,16 @@ create_admin_user() {
         await conn.end();
     })();
     " 2>/dev/null || warn "Admin SQL — vérifie MySQL"
-    echo -e "  ${LAV}Admin : ${CYAN}admin${RESET}"
-    echo -e "  ${LAV}Mot de passe : ${ORANGE}${pass}${RESET}"
+    echo
+    echo -e "${BG}${CYAN}╔═══$(printf '═%.0s' {1..57})═══╗${RESET}"
+    echo -e "${BG}${CYAN}║${RESET}${TITLE_BG}$(center '🔐  ACCÈS PANEL ADMIN  🔐' 61)${RESET}${BG}${CYAN}║${RESET}"
+    echo -e "${BG}${CYAN}╠═══$(printf '═%.0s' {1..57})═══╣${RESET}"
+    echo -e "${BG}${CYAN}║${RESET}  ${LAV}URL IP   :${RESET} ${CYAN}http://$(hostname -I | awk '{print $1}'):8585/admin/${RESET}  ${BG}${CYAN}║${RESET}"
+    echo -e "${BG}${CYAN}║${RESET}  ${LAV}URL DOM  :${RESET} ${CYAN}https://$(cat /etc/kighmu/domain.txt 2>/dev/null)/admin/${RESET}  ${BG}${CYAN}║${RESET}"
+    echo -e "${BG}${CYAN}║${RESET}  ${LAV}Utilisateur :${RESET} ${WHITE}${user}${RESET}                        ${BG}${CYAN}║${RESET}"
+    echo -e "${BG}${CYAN}║${RESET}  ${LAV}Mot de passe :${RESET} ${ORANGE}${pass}${RESET}                       ${BG}${CYAN}║${RESET}"
+    echo -e "${BG}${CYAN}╚═══$(printf '═%.0s' {1..57})═══╝${RESET}"
+    echo
     log "Admin '$user' configuré"
 }
 
@@ -239,10 +257,12 @@ configure_nginx() {
     systemctl stop nginx 2>/dev/null || true
     rm -f /etc/nginx/sites-enabled/default 2>/dev/null || true
     cat > /etc/nginx/sites-available/kighmu << 'NGXEOF'
+# HTTP — accès direct par IP
 server {
     listen 8585;
     server_name _;
     client_max_body_size 32m;
+
     location / {
         proxy_pass http://127.0.0.1:3000;
         proxy_http_version 1.1;
@@ -253,10 +273,82 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_read_timeout 86400;
     }
+
+    location /ws-dropbear {
+        proxy_pass http://127.0.0.1:2095;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_read_timeout 86400;
+    }
+
+    location /ws-stunnel {
+        proxy_pass http://127.0.0.1:700;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_read_timeout 86400;
+    }
+}
+
+# HTTP (port 80) — ACME challenge + proxy pour le domaine
+server {
+    listen 80;
+    server_name DOMAIN_PLACEHOLDER;
+    client_max_body_size 32m;
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_read_timeout 86400;
+    }
+
+    location /ws-dropbear {
+        proxy_pass http://127.0.0.1:2095;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_read_timeout 86400;
+    }
+
+    location /ws-stunnel {
+        proxy_pass http://127.0.0.1:700;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_read_timeout 86400;
+    }
 }
 NGXEOF
+    sed -i "s/DOMAIN_PLACEHOLDER/$DOMAIN/g" /etc/nginx/sites-available/kighmu
     ln -sf /etc/nginx/sites-available/kighmu /etc/nginx/sites-enabled/
     nginx -t 2>/dev/null && systemctl start nginx && log "Nginx OK (port 8585)" || err "Nginx invalide"
+    if [[ "$DOMAIN" =~ \. ]] && ! [[ "$DOMAIN" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        local svc_port80; svc_port80=$(ss -tlnp | grep ':80 ' | head -1)
+        if [[ -n "$svc_port80" ]]; then
+            warn "Le port 80 est occupé ($svc_port80). Certbot ACME nécessite le port 80."
+            warn "Arrêt temporaire du service sur le port 80 pour certbot..."
+            local pid80; pid80=$(ss -tlnp | grep ':80 ' | grep -oP 'pid=\K[0-9]+')
+            [[ -n "$pid80" ]] && kill "$pid80" 2>/dev/null; sleep 1
+        fi
+        DEBIAN_FRONTEND=noninteractive apt-get install -y -qq certbot python3-certbot-nginx 2>/dev/null
+        certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos -m "admin@$DOMAIN" 2>/dev/null && \
+            log "Certificat SSL obtenu pour $DOMAIN" || \
+            warn "Certbot a échoué pour $DOMAIN (vérifiez que le DNS pointe ici)"
+    fi
 }
 
 # ── NFTABLES ──
@@ -459,8 +551,38 @@ full_install() {
     setup_traffic_collection
     setup_bandwidth_service
     deploy_control_panel
+
+    # ── Installation de tous les services ──
+    export SKIP_PAUSE=1
+
+    log "Installation des services SSH..."
+    source "$SCRIPT_DIR/ssh.sh" 2>/dev/null || true
+    install_openssh 2>/dev/null || true
+    install_dropbear 2>/dev/null || true
+    install_ssl_tls 2>/dev/null || true
+    install_sshws 2>/dev/null || true
+    install_sockspy 2>/dev/null || true
+    install_wstunnel 2>/dev/null || true
+    install_socks_python 2>/dev/null || true
+    install_ws_services 2>/dev/null || true
+    install_slowdns 2>/dev/null || true
+
+    log "Installation des services Xray & V2Ray..."
+    source "$SCRIPT_DIR/xray-v2ray.sh" 2>/dev/null || true
+    install_xray 2>/dev/null || true
+    install_v2ray 2>/dev/null || true
+
+    log "Installation des services UDP..."
+    source "$SCRIPT_DIR/udp.sh" 2>/dev/null || true
+    install_zivpn 2>/dev/null || true
+    install_hysteria 2>/dev/null || true
+    install_badvpn 2>/dev/null || true
+    install_udp_custom 2>/dev/null || true
+    apply_network_optimizations 2>/dev/null || true
+
+    unset SKIP_PAUSE
+
     echo
-    echo -e "${BG}${CYAN}╔═══$(printf '═%.0s' {1..57})═══╗${RESET}"
     echo -e "${BG}${CYAN}║${RESET}${TITLE_BG}$(center '✅  INSTALLATION TERMINÉE  ✅' 61)${RESET}${BG}${CYAN}║${RESET}"
     echo -e "${BG}${CYAN}╚═══$(printf '═%.0s' {1..57})═══╝${RESET}"
     echo
@@ -585,8 +707,8 @@ with_bg() { echo -ne "${BG}$1${RESET}"; }
 # ── Convertisseur en GB/TB avec 1 décimale ──
 fmt_bytes() {
     local b=$1
-    if ((b < 1099511627776)); then awk "BEGIN{printf \"%.1f GB\", $b/1073741824}"; return; fi
-    awk "BEGIN{printf \"%.1f TB\", $b/1099511627776}"
+    if ((b < 1099511627776)); then awk "BEGIN{printf \"%.2f GB\", $b/1073741824}"; return; fi
+    awk "BEGIN{printf \"%.2f TB\", $b/1099511627776}"
 }
 
 # ── Collecte bande passante ──
@@ -600,27 +722,52 @@ get_bytes() {
 
 CUR_BYTES=$(get_bytes)
 TODAY=$(date +%Y-%m-%d)
+PREV_FILE="$BW_DIR/last_total"
 
-# Stocker le snapshot actuel
-echo "$CUR_BYTES" > "$BW_DIR/$TODAY"
-
-# Totaux accumulés
-BW_DAY=$CUR_BYTES
-prev=$CUR_BYTES
-if [[ -f "$BW_DIR/$TODAY.prev" ]]; then
-    prev=$(<"$BW_DIR/$TODAY.prev")
+# Migration unique : anciens fichiers contiennent des cumulatifs → deltas
+if [[ ! -f "$PREV_FILE" ]]; then
+    LAST=0
+    for f in $(ls "$BW_DIR"/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9] 2>/dev/null | sort); do
+        val=$(<"$f")
+        delta=$((val - LAST)); ((delta < 0)) && delta=$val
+        echo "$delta" > "$f"
+        LAST=$val
+    done
+    rm -f "$BW_DIR"/*.prev 2>/dev/null
 fi
-BW_DAY=$((CUR_BYTES - prev))
-(( BW_DAY < 0 )) && BW_DAY=$CUR_BYTES
-echo "$CUR_BYTES" > "$BW_DIR/$TODAY.prev"
 
-# Semaine (7 derniers jours)
+# Dernière valeur cumulative lue
+if [[ -f "$PREV_FILE" ]]; then
+    PREV_TOTAL=$(<"$PREV_FILE")
+else
+    # Première exécution : initialiser pour éviter un delta monstrueux
+    PREV_TOTAL=$CUR_BYTES
+fi
+
+# Delta depuis la dernière vérification
+BW_DAY=$((CUR_BYTES - PREV_TOTAL))
+(( BW_DAY < 0 )) && BW_DAY=$CUR_BYTES
+
+# Sauvegarde pour le prochain delta
+echo "$CUR_BYTES" > "$PREV_FILE"
+
+# Cumul dans le fichier journalier (delta du jour)
+ACCUM_FILE="$BW_DIR/$TODAY"
+if [[ -f "$ACCUM_FILE" ]]; then
+    PREV_ACCUM=$(<"$ACCUM_FILE")
+    echo $((PREV_ACCUM + BW_DAY)) > "$ACCUM_FILE"
+else
+    echo "$BW_DAY" > "$ACCUM_FILE"
+fi
+BW_DAY=$(<"$ACCUM_FILE")
+
+# Semaine : somme des 7 derniers fichiers jour (deltas)
 BW_WEEK=0
-for d in $(date -d "6 days ago" +%Y-%m-%d 2>/dev/null; seq 0 6 | xargs -I{} date -d "{} days ago" +%Y-%m-%d 2>/dev/null); do
+for d in $(seq 0 6 | xargs -I{} date -d "{} days ago" +%Y-%m-%d 2>/dev/null); do
     [[ -f "$BW_DIR/$d" && -s "$BW_DIR/$d" ]] && BW_WEEK=$((BW_WEEK + $(<"$BW_DIR/$d")))
 done
 
-# Mois (30 derniers jours)
+# Mois : somme des 30 derniers fichiers jour (deltas)
 BW_MONTH=0
 for d in $(seq 0 30 | xargs -I{} date -d "{} days ago" +%Y-%m-%d 2>/dev/null); do
     [[ -f "$BW_DIR/$d" && -s "$BW_DIR/$d" ]] && BW_MONTH=$((BW_MONTH + $(<"$BW_DIR/$d")))
@@ -653,6 +800,7 @@ CPU_CORES=$(nproc 2>/dev/null || echo "?")
 CPU_USED=$(top -bn1 2>/dev/null | awk '/Cpu\(s\)/ {print $2}' | cut -d. -f1 || echo "?")
 [[ -z "$CPU_USED" || "$CPU_USED" == "?" ]] && CPU_USED=$(ps -eo %cpu --no-headers 2>/dev/null | awk '{s+=$1}END{printf "%d", s/NR}' || echo "0")
 KERNEL=$(uname -r 2>/dev/null || echo "?")
+OS_NAME=$(. /etc/os-release 2>/dev/null && echo "$PRETTY_NAME" || echo "$KERNEL")
 
 # Comptes
 N_SSH=$(awk -F: '$7~/bash|sh/ && $3>=1000' /etc/passwd 2>/dev/null | wc -l)
@@ -666,88 +814,110 @@ N_ZIVPN=$([[ -f /etc/zivpn/users.list ]] && awk -F'|' -v d="$(date +%Y-%m-%d)" '
 N_TOTAL=$((N_SSH + N_VMESS + N_VLESS + N_TROJAN + N_SHADOW + N_V2RAY + N_HY + N_ZIVPN))
 
 # Statuts services
-svc() { systemctl is-active --quiet "$1" 2>/dev/null && echo -e "${GREEN}ON${RESET}" || echo -e "${RED}OFF${RESET}"; }
+svc() {
+    if systemctl cat "$1.service" &>/dev/null 2>&1; then
+        systemctl is-active --quiet "$1" 2>/dev/null && echo -e "${GREEN}ON${RESET}" || echo -e "${RED}OFF${RESET}"
+    else
+        echo -e "${DIM}---${RESET}"
+    fi
+}
 S_SSH=$(svc ssh); S_DROP=$(svc dropbear-custom); S_NGINX=$(svc nginx)
 S_HAPROXY=$(svc haproxy); S_XRAY=$(svc xray); S_V2RAY=$(svc v2ray)
 S_HY=$(svc hysteria); S_ZIVPN=$(svc zivpn); S_SSHWS=$(svc sshws)
 
 # ── DRAW ──
+HL() { printf "${BG}${CYAN}%s${RESET}\n" "$(printf '┄%.0s' {1..64})"; }
+
 draw_panel() {
     echo -e "${CLR}${BG}"
 
     # ── Bandeau titre ──
-    echo -e "${BG}${CYAN}╔═══$(printf '═%.0s' {1..67})═══╗${RESET}"
-    echo -e "${BG}${CYAN}║${RESET}${TITLE_BG}          $(center '  WELCOME TO KIGHMU PREMIUM VPN  ' 51)          ${RESET}${BG}${CYAN}║${RESET}"
-    echo -e "${BG}${CYAN}╚═══$(printf '═%.0s' {1..67})═══╝${RESET}"
+    HL
+    echo -e "${BG}${CYAN}          ▓▓▓ ${WHITE}${BOLD}WELCOME TO KIGHMU VPN${RESET}${BG}${CYAN} ▓▓▓${RESET}"
+    HL
+    echo
 
     # ── Infos système ──
-    printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
-    printf "${BG}║${RESET}  ${LAV}SYSTEM VPS${RESET}     ${WHITE}%-34s${RESET}${BG}║${RESET}\n" "$IP  $KERNEL"
-    printf "${BG}║${RESET}  ${LAV}RAM SERVER${RESET}     ${WHITE}%-16s${RESET} (${ORANGE}%s%%${RESET} utilisé)${BG}║${RESET}\n" "$RAM" "$RAM_PCT"
-    printf "${BG}║${RESET}  ${LAV}CPU CORES${RESET}      ${WHITE}%-2s${RESET} (${YELLOW}%s%%${RESET} utilisé)${BG}║${RESET}\n" "$CPU_CORES" "$CPU_USED"
-    printf "${BG}║${RESET}  ${LAV}DOMAIN${RESET}         ${ORANGE}%-34s${RESET}${BG}║${RESET}\n" "$DOMAIN"
-    printf "${BG}║${RESET}  ${LAV}NS SLOWDNS${RESET}     ${MAG}%-34s${RESET}${BG}║${RESET}\n" "$NS4"
-    printf "${BG}║${RESET}  ${LAV}NS V2RAY${RESET}       ${MAG}%-34s${RESET}${BG}║${RESET}\n" "$NV4"
+    local RAM_TOTAL=$(free -m | awk '/Mem:/ {print $2}')
+    echo -e "${BG}  ${LAV} ${BOLD}»${RESET} ${LAV}SYSTEM VPS${RESET}  ${CYAN}:${RESET} ${WHITE}${OS_NAME}${RESET}"
+    echo -e "${BG}  ${LAV} ${BOLD}»${RESET} ${LAV}RAM SERVER${RESET}  ${CYAN}:${RESET} ${WHITE}${RAM}${RESET} (${ORANGE}${RAM_PCT}%${RESET})"
+    echo -e "${BG}  ${LAV} ${BOLD}»${RESET} ${LAV}CPU CORES${RESET}   ${CYAN}:${RESET} ${WHITE}${CPU_CORES}${RESET} (${YELLOW}${CPU_USED}% used${RESET})"
+    echo -e "${BG}  ${LAV} ${BOLD}»${RESET} ${LAV}IP VPS${RESET}      ${CYAN}:${RESET} ${WHITE}${IP}${RESET}"
+    echo -e "${BG}  ${LAV} ${BOLD}»${RESET} ${LAV}DOMAIN${RESET}      ${CYAN}:${RESET} ${ORANGE}${DOMAIN}${RESET}"
+    echo -e "${BG}  ${LAV} ${BOLD}»${RESET} ${LAV}NS SLOWDNS${RESET}  ${CYAN}:${RESET} ${MAG}${NS4}${RESET}"
+    echo -e "${BG}  ${LAV} ${BOLD}»${RESET} ${LAV}NS V2RAY${RESET}    ${CYAN}:${RESET} ${MAG}${NV4}${RESET}"
 
-    # ── Cadre QUOTA ──
+    echo
+    HL
+    echo -e "${BG}                ${ORANGE}>>>${RESET} ${LAV}${BOLD}DATA QUOTA${RESET} ${ORANGE}<<<${RESET}"
+    HL
     local qd="${C_DAY}${BW_DAY_H}${RESET}" qw="${C_WEEK}${BW_WEEK_H}${RESET}" qm="${C_MONTH}${BW_MONTH_H}${RESET}"
-    printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
-    printf "${BG}║${RESET}  ${ORANGE}>>${RESET} ${LAV}DATA QUOTA${RESET}  ${WHITE}Jour:${RESET} %b  ${WHITE}Semaine:${RESET} %b  ${WHITE}Mois:${RESET} %b  ${BG}║${RESET}\n" "$qd" "$qw" "$qm"
+    printf "${BG}   ${LAV}Day${RESET} ${CYAN}:${RESET} %b    ${LAV}Week${RESET} ${CYAN}:${RESET} %b    ${LAV}Month${RESET} ${CYAN}:${RESET} %b\n" "$qd" "$qw" "$qm"
 
-    # ── Séparateur + Account Info ──
-    printf "${BG}╠══════════════════════════════════════════════════════════════════════╣${RESET}\n"
-    printf "${BG}║${RESET}  ${ORANGE}>>${RESET} $(center 'ACCOUNT INFORMATION' 48) ${ORANGE}<<${RESET}  ${BG}║${RESET}\n"
-    printf "${BG}╠══════════════════════════════════════════════════════════════════════╣${RESET}\n"
-    printf "${BG}║${RESET}  ══╡ $(rainbow) ╞══ ${BG}║${RESET}\n"
-    printf "${BG}╠══════════════════════════════════════════════════════════════════════╣${RESET}\n"
+    echo
+    HL
+    echo -e "${BG}           ${ORANGE}>>>${RESET} ${LAV}${BOLD}ACCOUNT INFORMATION${RESET} ${ORANGE}<<<${RESET}"
+    HL
+    echo -e "${BG}   ${LAV}SSH/UDP${RESET}      ${CYAN}:${RESET} ${WHITE}${N_SSH}${RESET}  ${GREEN}ACCOUNT PREMIUM${RESET}"
+    echo -e "${BG}   ${LAV}VMESS${RESET}        ${CYAN}:${RESET} ${WHITE}${N_VMESS}${RESET}  ${GREEN}ACCOUNT PREMIUM${RESET}"
+    echo -e "${BG}   ${LAV}VLESS${RESET}        ${CYAN}:${RESET} ${WHITE}${N_VLESS}${RESET}  ${GREEN}ACCOUNT PREMIUM${RESET}"
+    echo -e "${BG}   ${LAV}TROJAN${RESET}       ${CYAN}:${RESET} ${WHITE}${N_TROJAN}${RESET}  ${GREEN}ACCOUNT PREMIUM${RESET}"
+    echo -e "${BG}   ${LAV}SHADOWSOCKS${RESET}  ${CYAN}:${RESET} ${WHITE}${N_SHADOW}${RESET}  ${GREEN}ACCOUNT PREMIUM${RESET}"
+    echo -e "${BG}   ${LAV}HYSTERIA${RESET}     ${CYAN}:${RESET} ${WHITE}${N_HY}${RESET}  ${GREEN}ACCOUNT PREMIUM${RESET}"
+    echo -e "${BG}   ${LAV}ZIVPN${RESET}        ${CYAN}:${RESET} ${WHITE}${N_ZIVPN}${RESET}  ${GREEN}ACCOUNT PREMIUM${RESET}"
 
-    # ── Tableau comptes ──
-    printf "${BG}║${RESET} ${LAV}SSH/OPENVPN${RESET}   ${MAG}%-2s${RESET}   ${LAV}VMESS${RESET}        ${MAG}%-2s${RESET}   ${LAV}VLESS${RESET}        ${MAG}%-2s${RESET} ${BG}║${RESET}\n" "$N_SSH" "$N_VMESS" "$N_VLESS"
-    printf "${BG}║${RESET} ${LAV}TROJAN${RESET}        ${MAG}%-2s${RESET}   ${LAV}SHADOWSOCKS${RESET}  ${MAG}%-2s${RESET}   ${LAV}V2RAY DNS${RESET}    ${MAG}%-2s${RESET} ${BG}║${RESET}\n" "$N_TROJAN" "$N_SHADOW" "$N_V2RAY"
-    printf "${BG}║${RESET} ${LAV}HYSTERIA${RESET}      ${MAG}%-2s${RESET}   ${LAV}ZIVPN${RESET}        ${MAG}%-2s${RESET}   ${LAV}TOTAL${RESET}        ${MAG}%-2s${RESET} ${BG}║${RESET}\n" "$N_HY" "$N_ZIVPN" "$N_TOTAL"
+    echo
+    HL
+    echo -e "${BG}               ${ORANGE}>>>${RESET} ${LAV}${BOLD}PREMIUM MENU${RESET} ${ORANGE}<<<${RESET}"
+    HL
+    printf "${BG}  ${LAV}SSH${RESET} ${CYAN}:${RESET} %b      ${LAV}NGINX${RESET} ${CYAN}:${RESET} %b      ${LAV}HAPROXY${RESET} ${CYAN}:${RESET} %b\n" "$S_SSH" "$S_NGINX" "$S_HAPROXY"
+    printf "${BG}  ${LAV}XRAY${RESET} ${CYAN}:${RESET} %b     ${LAV}V2RAY${RESET} ${CYAN}:${RESET} %b      ${LAV}DROPBEAR${RESET} ${CYAN}:${RESET} %b\n" "$S_XRAY" "$S_V2RAY" "$S_DROP"
+    printf "${BG}  ${LAV}HYSTERIA${RESET} ${CYAN}:${RESET} %b ${LAV}ZIVPN${RESET} ${CYAN}:${RESET} %b      ${LAV}WS-epro${RESET} ${CYAN}:${RESET} %b\n" "$S_HY" "$S_ZIVPN" "$S_SSHWS"
 
-    # ── Séparateur + Premium Menu ──
-    printf "${BG}╠══════════════════════════════════════════════════════════════════════╣${RESET}\n"
-    printf "${BG}║${RESET}  ══╡ $(rainbow) ╞══ ${BG}║${RESET}\n"
-    printf "${BG}╠══════════════════════════════════════════════════════════════════════╣${RESET}\n"
-    printf "${BG}║${RESET}  ${ORANGE}>>${RESET} $(center 'PREMIUM MENU' 48) ${ORANGE}<<${RESET}  ${BG}║${RESET}\n"
-    printf "${BG}╠══════════════════════════════════════════════════════════════════════╣${RESET}\n"
+    echo
+    HL
 
-    # ── Statuts services ──
-    printf "${BG}║${RESET}  ${LAV}SSH${RESET} %s  ${LAV}NGINX${RESET} %s  ${LAV}HAPROXY${RESET} %s  ${LAV}XRAY${RESET} %s  ${LAV}V2RAY${RESET} %s ${BG}║${RESET}\n" "$S_SSH" "$S_NGINX" "$S_HAPROXY" "$S_XRAY" "$S_V2RAY"
-    printf "${BG}║${RESET}  ${LAV}DROPBEAR${RESET} %s  ${LAV}HYSTERIA${RESET} %s  ${LAV}ZIVPN${RESET} %s  ${LAV}WS-epro${RESET} %s                               ${BG}║${RESET}\n" "$S_DROP" "$S_HY" "$S_ZIVPN" "$S_SSHWS"
-    printf "${BG}╠══════════════════════════════════════════════════════════════════════╣${RESET}\n"
-
-    # ── Menu numéroté (3 colonnes) ──
     local items=(
-        "[01] MENU SSH VIP"    "[02] MENU VMESS"      "[03] MENU VLESS"
-        "[04] MENU TROJAN"     "[05] MENU SHADOW"     "[06] MENU ZIVPN"
-        "[07] MENU HYSTERIA"   "[08] MENU V2RAY DNS"  "[09] AUTO REBOOT"
-        "[10] MENU PORT"       "[11] PANEL WEB"       "[12] DELL ALL EXP"
-        "[13] CLEAR LOG"       "[14] STOP ALL SERV"   "[15] BCKP/RSTR"
-        "[16] REBOOT VPS"      "[17] RESTART VPS"     "[18] SET DOMAIN"
-        "[19] CERT SSL"        "[20] QUOTA USAGE"     "[21] CLEAR CACHE"
-        "[22] CEK BANDWIDTH"   "[23] DÉSINSTALLE"     "[24] MENU BOT VIP"
+        "[01] MENU SSH VIP"    "[09] AUTO REBOOT"     "[17] RESTART VPS"
+        "[02] MENU VMESS"      "[10] MENU PORT"       "[18] SET DOMAIN"
+        "[03] MENU VLESS"      "[11] PANEL WEB"       "[19] CERT SSL"
+        "[04] MENU TROJAN"     "[12] DEL ALL EXP"     "[20] QUOTA USAGE"
+        "[05] MENU SHADOW"     "[13] CLEAR LOG"       "[21] CLEAR CACHE"
+        "[06] MENU ZIVPN"      "[14] STOP ALL SERV"   "[22] CEK BANDWIDTH"
+        "[07] MENU HYSTERIA"   "[15] BCKP/RSTR"       "[23] DÉSINSTALLE"
+        "[08] MENU V2RAY DNS"  "[16] REBOOT VPS"      "[24] MENU BOT VIP"
     )
     for ((i=0; i<24; i+=3)); do
-        printf "${BG}║${RESET}  ${ORANGE}%-20s${RESET} ${ORANGE}%-20s${RESET} ${ORANGE}%-20s${RESET} ${BG}║${RESET}\n" \
-            "${items[$i]}" "${items[$((i+1))]:-}" "${items[$((i+2))]:-}"
+        line=""
+        for idx in $i $((i+1)) $((i+2)); do
+            item="${items[$idx]:-}"
+            if [[ -n "$item" ]]; then
+                [[ -z "$line" ]] || line+=" "
+                num="${item:0:4}"
+                name="${item:5}"
+                vlen=$(( ${#num} + 1 + ${#name} ))
+                pad=$(( 20 - vlen ))
+                [[ $pad -lt 0 ]] && pad=0
+                line+="${WHITE}${num}${RESET} ${ORANGE}${name}${RESET}"
+                [[ $pad -gt 0 ]] && line+="$(printf '%*s' "$pad" '')"
+            fi
+        done
+        echo -e "${BG}  ${line}${RESET}"
     done
 
-    printf "${BG}╠══════════════════════════════════════════════════════════════════════╣${RESET}\n"
+    HL
+    echo -e "${BG}  ${ORANGE}[25]${RESET} ${WHITE}CHANGE BANNER SSH${RESET}   ${ORANGE}<<<${RESET}"
+    echo -e "${BG}  ${ORANGE}[26]${RESET} ${WHITE}LOG CREATE USER ACCOUNT${RESET} ${ORANGE}<<<${RESET}"
+    HL
 
-    # ── Options spéciales ──
-    printf "${BG}║${RESET}  ${ORANGE}[25]${RESET} ${WHITE}CHANGE BANNER SSH${RESET}   ${ORANGE}[26]${RESET} ${WHITE}LOG CREATE USER${RESET}     ${BG}║${RESET}\n"
-    printf "${BG}╠══════════════════════════════════════════════════════════════════════╣${RESET}\n"
-
-    # ── Footer ──
     local CUR_USER=${USER:-root} VER="v4.0"
-    printf "${BG}║${RESET}  ${LAV}VERSION${RESET}  ${YELLOW}%-4s${RESET}      ${LAV}USER${RESET}      ${YELLOW}%-10s${RESET}  ${LAV}EXPIRATION${RESET} ${YELLOW}%-9s${RESET} ${BG}║${RESET}\n" "$VER" "$CUR_USER" "PERMANENT"
-    echo -e "${BG}${CYAN}╚═══$(printf '═%.0s' {1..67})═══╝${RESET}"
+    echo -e "${BG}  ${LAV}Script Version${RESET}  ${CYAN}:${RESET} ${YELLOW}${VER}${RESET}"
+    echo -e "${BG}  ${LAV}Script Status${RESET}   ${CYAN}:${RESET} ${GREEN}Active${RESET}"
+    echo -e "${BG}  ${LAV}Username${RESET}        ${CYAN}:${RESET} ${WHITE}${CUR_USER}${RESET}"
+    echo -e "${BG}  ${LAV}Expired script${RESET}  ${CYAN}:${RESET} ${YELLOW}PERMANENT${RESET}"
+    HL
 
-    # ── Saisie ──
-    echo
-    echo -ne "${BG}${LAV}  Select From Options [ 1-26 ] »${RESET} ${WHITE}"
+    echo -ne "${BG}${LAV} Select From Options [ 1-26 ] ${ORANGE}»»${RESET} ${WHITE}"
     read -r CHOIX
     echo -e "${RESET}"
 }
