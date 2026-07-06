@@ -617,13 +617,13 @@ echo "$CUR_BYTES" > "$BW_DIR/$TODAY.prev"
 # Semaine (7 derniers jours)
 BW_WEEK=0
 for d in $(date -d "6 days ago" +%Y-%m-%d 2>/dev/null; seq 0 6 | xargs -I{} date -d "{} days ago" +%Y-%m-%d 2>/dev/null); do
-    [[ -f "$BW_DIR/$d" ]] && BW_WEEK=$((BW_WEEK + $(<"$BW_DIR/$d")))
+    [[ -f "$BW_DIR/$d" && -s "$BW_DIR/$d" ]] && BW_WEEK=$((BW_WEEK + $(<"$BW_DIR/$d")))
 done
 
 # Mois (30 derniers jours)
 BW_MONTH=0
 for d in $(seq 0 30 | xargs -I{} date -d "{} days ago" +%Y-%m-%d 2>/dev/null); do
-    [[ -f "$BW_DIR/$d" ]] && BW_MONTH=$((BW_MONTH + $(<"$BW_DIR/$d")))
+    [[ -f "$BW_DIR/$d" && -s "$BW_DIR/$d" ]] && BW_MONTH=$((BW_MONTH + $(<"$BW_DIR/$d")))
 done
 
 BW_DAY_H=$(fmt_bytes $BW_DAY)
