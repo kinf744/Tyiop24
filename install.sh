@@ -677,7 +677,7 @@ draw_panel() {
 
     # ── Bandeau titre ──
     echo -e "${BG}${CYAN}╔═══$(printf '═%.0s' {1..67})═══╗${RESET}"
-    echo -e "${BG}${CYAN}║${RESET}${TITLE_BG}          $(center '🚀  WELCOME TO KIGHMU PREMIUM VPN  🚀' 51)          ${RESET}${BG}${CYAN}║${RESET}"
+    echo -e "${BG}${CYAN}║${RESET}${TITLE_BG}          $(center '  WELCOME TO KIGHMU PREMIUM VPN  ' 51)          ${RESET}${BG}${CYAN}║${RESET}"
     echo -e "${BG}${CYAN}╚═══$(printf '═%.0s' {1..67})═══╝${RESET}"
 
     # ── Infos système ──
@@ -783,7 +783,7 @@ prompt_sub() {
 # ================================================
 menu_ssh_vip() {
     while true; do
-        sub_header '🔰  MENU SSH VIP  🔰'
+ sub_header 'MENU SSH VIP'
         printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
         sub_row 1 "CREER COMPTE SSH"        2 "SUPPRIMER COMPTE"
         sub_row 3 "LISTE COMPTES"           4 "RENEW COMPTE"
@@ -800,35 +800,35 @@ menu_ssh_vip() {
                 local NS=$(cat /etc/slowdns/ns.conf 2>/dev/null || echo "ns4.kingom.ggff.net")
                 clear
                 echo -e "${BG}╔═══════════════════════════════════════════════════════════════════════╗${RESET}"
-                echo -e "${BG}║${RESET}  ${ORANGE}✨  NOUVEAU UTILISATEUR CRE  ✨${RESET}                             ${BG}║${RESET}"
+                 echo -e "${BG}║${RESET}  ${ORANGE}  NOUVEAU UTILISATEUR CRE  ${RESET}                             ${BG}║${RESET}"
                 echo -e "${BG}╠═══════════════════════════════════════════════════════════════════════╣${RESET}"
-                echo -e "${BG}║${RESET}  ${LAV}🔐 PORTS DISPONIBLES :${RESET}                                       ${BG}║${RESET}"
+                 echo -e "${BG}║${RESET}  ${LAV}PORTS DISPONIBLES :${RESET}                                       ${BG}║${RESET}"
                 echo -e "${BG}║${RESET}  ${WHITE}∘ SSH: 22          ∘ System-DNS: 53${RESET}                         ${BG}║${RESET}"
                 echo -e "${BG}║${RESET}  ${WHITE}∘ SSH WS: 80      ∘ DROPBEAR: 109   ∘ SSL: 444${RESET}              ${BG}║${RESET}"
                 echo -e "${BG}║${RESET}  ${WHITE}∘ BadVPN: 7100, 7200, 7300${RESET}                                  ${BG}║${RESET}"
                 echo -e "${BG}║${RESET}  ${WHITE}∘ SLOWDNS: 5300    ∘ UDP-Custom: 1-65535${RESET}                    ${BG}║${RESET}"
                 echo -e "${BG}║${RESET}  ${WHITE}∘ WS-epro: 80  ∘ Proxy WS: 9090${RESET}                             ${BG}║${RESET}"
                 echo -e "${BG}╠═══════════════════════════════════════════════════════════════════════╣${RESET}"
-                echo -e "${BG}║${RESET}  ${ORANGE}🌍 DOMAINE :${RESET} ${CYAN}${D}${RESET}                                            ${BG}║${RESET}"
-                echo -e "${BG}║${RESET}  ${ORANGE}📌 IP HOST :${RESET} ${CYAN}${IP}${RESET}                                             ${BG}║${RESET}"
-                echo -e "${BG}║${RESET}  ${ORANGE}👤 UTILISATEUR :${RESET} ${MAG}${u}${RESET}                                            ${BG}║${RESET}"
-                echo -e "${BG}║${RESET}  ${ORANGE}🔑 MOT DE PASSE :${RESET} ${MAG}${p}${RESET}                                            ${BG}║${RESET}"
-                echo -e "${BG}║${RESET}  ${ORANGE}📦 LIMITE :${RESET} ${YELLOW}${e} jours${RESET}                                            ${BG}║${RESET}"
+                 echo -e "${BG}║${RESET}  ${ORANGE}DOMAINE :${RESET} ${CYAN}${D}${RESET}                                            ${BG}║${RESET}"
+                 echo -e "${BG}║${RESET}  ${ORANGE}IP HOST :${RESET} ${CYAN}${IP}${RESET}                                             ${BG}║${RESET}"
+                 echo -e "${BG}║${RESET}  ${ORANGE}UTILISATEUR :${RESET} ${MAG}${u}${RESET}                                            ${BG}║${RESET}"
+                 echo -e "${BG}║${RESET}  ${ORANGE}MOT DE PASSE :${RESET} ${MAG}${p}${RESET}                                            ${BG}║${RESET}"
+                 echo -e "${BG}║${RESET}  ${ORANGE}LIMITE :${RESET} ${YELLOW}${e} jours${RESET}                                            ${BG}║${RESET}"
                 echo -e "${BG}║${RESET}  ${ORANGE}📅 DATE D'EXPIRATION :${RESET} ${YELLOW}${E}${RESET}                                      ${BG}║${RESET}"
                 echo -e "${BG}╠═══════════════════════════════════════════════════════════════════════╣${RESET}"
-                echo -e "${BG}║${RESET}  ${LAV}📲 APPS : HTTP Injector, CUSTOM, SOCKSIP TUNNEL, SSC ZIVPN, etc.${RESET}  ${BG}║${RESET}"
-                echo -e "${BG}║${RESET}  ${WHITE}➡️ SSH WS :${RESET} ${CYAN}${D}:80@${u}:${p}${RESET}                             ${BG}║${RESET}"
-                echo -e "${BG}║${RESET}  ${WHITE}➡️ SSL/TLS :${RESET} ${CYAN}${D}:444@${u}:${p}${RESET}                             ${BG}║${RESET}"
-                echo -e "${BG}║${RESET}  ${WHITE}➡️ PROXY WS :${RESET} ${CYAN}${D}:9090@${u}:${p}${RESET}                             ${BG}║${RESET}"
-                echo -e "${BG}║${RESET}  ${WHITE}➡️ SSH UDP :${RESET} ${CYAN}${D}:1-65535@${u}:${p}${RESET}                              ${BG}║${RESET}"
-                echo -e "${BG}║${RESET}  ${LAV}📜 PAYLOAD WS:${RESET}                                              ${BG}║${RESET}"
+                 echo -e "${BG}║${RESET}  ${LAV}APPS : HTTP Injector, CUSTOM, SOCKSIP TUNNEL, SSC ZIVPN, etc.${RESET}  ${BG}║${RESET}"
+                 echo -e "${BG}║${RESET}  ${WHITE}SSH WS :${RESET} ${CYAN}${D}:80@${u}:${p}${RESET}                             ${BG}║${RESET}"
+                 echo -e "${BG}║${RESET}  ${WHITE}SSL/TLS :${RESET} ${CYAN}${D}:444@${u}:${p}${RESET}                             ${BG}║${RESET}"
+                 echo -e "${BG}║${RESET}  ${WHITE}PROXY WS :${RESET} ${CYAN}${D}:9090@${u}:${p}${RESET}                             ${BG}║${RESET}"
+                 echo -e "${BG}║${RESET}  ${WHITE}SSH UDP :${RESET} ${CYAN}${D}:1-65535@${u}:${p}${RESET}                              ${BG}║${RESET}"
+                 echo -e "${BG}║${RESET}  ${LAV}PAYLOAD WS:${RESET}                                              ${BG}║${RESET}"
                 echo -e "${BG}║${RESET}  ${DIM}GET / HTTP/1.1[crlf]Host: [host][crlf]Connection: Upgrade${RESET}     ${BG}║${RESET}"
                 echo -e "${BG}║${RESET}  ${DIM}[crlf]User-Agent: [ua][crlf]Upgrade: websocket[crlf][crlf]${RESET}    ${BG}║${RESET}"
                 echo -e "${BG}╠═══════════════════════════════════════════════════════════════════════╣${RESET}"
-                echo -e "${BG}║${RESET}  ${LAV}🚀 CONFIG FASTDNS (5300)${RESET}                                    ${BG}║${RESET}"
-                echo -e "${BG}║${RESET}  ${LAV}🔐 Pub KEY:${RESET} ${YELLOW}${KEY}${RESET}          ${BG}║${RESET}"
+                 echo -e "${BG}║${RESET}  ${LAV}CONFIG FASTDNS (5300)${RESET}                                    ${BG}║${RESET}"
+                 echo -e "${BG}║${RESET}  ${LAV}Pub KEY:${RESET} ${YELLOW}${KEY}${RESET}          ${BG}║${RESET}"
                 echo -e "${BG}║${RESET}  ${LAV}NameServer:${RESET} ${CYAN}${NS}${RESET}                                         ${BG}║${RESET}"
-                echo -e "${BG}║${RESET}  ${GREEN}✅  COMPTE CREE AVEC SUCCES${RESET}                                   ${BG}║${RESET}"
+                 echo -e "${BG}║${RESET}  ${GREEN}COMPTE CREE AVEC SUCCES${RESET}                                   ${BG}║${RESET}"
                 echo -e "${BG}╚═══════════════════════════════════════════════════════════════════════╝${RESET}"
                 echo "$(date '+%Y-%m-%d %H:%M:%S') | CREATION | $u | Exp: $E" >> /var/log/kighmu-user.log 2>/dev/null || true
             else echo -e "${RED}  ✗ Échec création (user existe déjà ?)${RESET}"; fi; pause;;
@@ -842,7 +842,7 @@ menu_ssh_vip() {
             9) clear
                 echo -e "${CLR}${BG}"
                 echo -e "${BG}${CYAN}╔═══$(printf '═%.0s' {1..47})═══╗${RESET}"
-                echo -e "${BG}${CYAN}║${RESET}${TITLE_BG}$(center '📊  MONITEUR CONNEXIONS  📊' 51)${RESET}${BG}${CYAN}║${RESET}"
+                echo -e "${BG}${CYAN}║${RESET}${TITLE_BG}$(center '  MONITEUR CONNEXIONS  ' 51)${RESET}${BG}${CYAN}║${RESET}"
                 echo -e "${BG}${CYAN}╚═══$(printf '═%.0s' {1..47})═══╝${RESET}"
                 echo -e "${BG}  ${LAV}Utilisateur       Appareils   Statut${RESET}"
                 echo -e "${BG}  ${DIM}────────────────────────────────────────${RESET}"
@@ -914,7 +914,7 @@ show_v2ray_traffic() {
 
 menu_vmess() {
     while true; do
-        sub_header '📡  MENU VMESS  📡'
+ sub_header 'MENU VMESS'
         printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
         sub_row 1 "CREER COMPTE"            2 "SUPPRIMER COMPTE"
         sub_row 3 "LISTE COMPTES"           4 "RENEW COMPTE"
@@ -939,7 +939,7 @@ menu_vmess() {
 
 menu_vless() {
     while true; do
-        sub_header '📡  MENU VLESS  📡'
+ sub_header 'MENU VLESS'
         printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
         sub_row 1 "CREER COMPTE"            2 "SUPPRIMER COMPTE"
         sub_row 3 "LISTE COMPTES"           4 "RENEW COMPTE"
@@ -964,7 +964,7 @@ menu_vless() {
 
 menu_trojan() {
     while true; do
-        sub_header '🔒  MENU TROJAN  🔒'
+ sub_header 'MENU TROJAN'
         printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
         sub_row 1 "CREER COMPTE"            2 "SUPPRIMER COMPTE"
         sub_row 3 "LISTE COMPTES"           4 "RENEW COMPTE"
@@ -989,7 +989,7 @@ menu_trojan() {
 
 menu_shadow() {
     while true; do
-        sub_header '🌑  MENU SHADOWSOCKS  🌑'
+ sub_header 'MENU SHADOWSOCKS'
         printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
         sub_row 1 "CREER COMPTE"            2 "SUPPRIMER COMPTE"
         sub_row 3 "LISTE COMPTES"           4 "RENEW COMPTE"
@@ -1014,7 +1014,7 @@ menu_shadow() {
 
 menu_zivpn() {
     while true; do
-        sub_header '🌐  MENU ZIVPN  🌐'
+ sub_header 'MENU ZIVPN'
         printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
         sub_row 1 "CREER COMPTE"            2 "SUPPRIMER COMPTE"
         sub_row 3 "LISTE COMPTES"           4 "RENEW COMPTE"
@@ -1038,7 +1038,7 @@ menu_zivpn() {
 
 menu_hysteria() {
     while true; do
-        sub_header '⚡  MENU HYSTERIA  ⚡'
+ sub_header 'MENU HYSTERIA'
         printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
         sub_row 1 "CREER COMPTE"            2 "SUPPRIMER COMPTE"
         sub_row 3 "LISTE COMPTES"           4 "RENEW COMPTE"
@@ -1062,7 +1062,7 @@ menu_hysteria() {
 
 menu_v2ray_dns() {
     while true; do
-        sub_header '🛰️  MENU V2RAY DNS  🛰️'
+ sub_header 'MENU V2RAY DNS'
         printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
         sub_row 1 "CREER COMPTE"            2 "SUPPRIMER COMPTE"
         sub_row 3 "LISTE COMPTES"           4 "RENEW COMPTE"
@@ -1100,7 +1100,7 @@ NV4EOF
 }
 
 menu_auto_reboot() {
-    sub_header '🔄  AUTO REBOOT  🔄'
+ sub_header 'AUTO REBOOT'
     printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
     local cron=$(crontab -l 2>/dev/null | grep -i reboot || true)
     if [[ -n "$cron" ]]; then
@@ -1122,7 +1122,7 @@ menu_auto_reboot() {
 
 menu_port() {
     while true; do
-        sub_header '🔌  MENU PORT  🔌'
+ sub_header 'MENU PORT'
         printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
         sub_row 1 "CHANGE PORT SSH"         2 "CHANGE PORT DROPBEAR"
         sub_row 3 "CHANGE PORT NGINX"       4 "CHANGE PORT XRAY"
@@ -1143,7 +1143,7 @@ menu_port() {
 
 menu_panel_web() {
     while true; do
-        sub_header '🌍  PANEL WEB  🌍'
+ sub_header 'PANEL WEB'
         printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
         sub_row 1 "STATUT PANEL"             2 "DEMARRER PANEL"
         sub_row 3 "ARRETER PANEL"            4 "RESTART PANEL"
@@ -1183,7 +1183,7 @@ menu_panel_web() {
 
 menu_dell_all_exp() {
     while true; do
-        sub_header '🗑️  DELETE ALL EXPIRED  🗑️'
+ sub_header 'DELETE ALL EXPIRED'
         printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
         sub_row 1 "COMPTES SSH EXPIRES"        2 "COMPTES XRAY EXPIRES"
         sub_row 3 "TOUS COMPTES EXPIRES"       4 "LISTE COMPTES EXPIRES"
@@ -1242,7 +1242,7 @@ menu_dell_all_exp() {
 
 menu_clear_log() {
     while true; do
-        sub_header '🧹  CLEAR LOG  🧹'
+ sub_header 'CLEAR LOG'
         printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
         sub_row 1 "LOGS SYSTEME (syslog/auth)" 2 "LOGS NGINX"
         sub_row 3 "LOGS XRAY/V2RAY"            4 "LOGS PANEL + CRÉATION"
@@ -1263,7 +1263,7 @@ menu_clear_log() {
 
 menu_stop_all_serv() {
     while true; do
-        sub_header '⛔  STOP ALL SERVICES  ⛔'
+ sub_header 'STOP ALL SERVICES'
         printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
         sub_row 1 "ARRETER TOUS"               2 "ARRETER SSH/DROPBEAR"
         sub_row 3 "ARRETER XRAY"               4 "ARRETER V2RAY"
@@ -1287,7 +1287,7 @@ menu_stop_all_serv() {
 
 menu_bckp_rstr() {
     while true; do
-        sub_header '💾  BACKUP / RESTORE  💾'
+ sub_header 'BACKUP / RESTORE'
         printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
         sub_row 1 "BACKUP COMPLETE"          2 "RESTORE BACKUP"
         sub_row 3 "BACKUP CONFIGS ONLY"     4 "LISTE BACKUPS"
@@ -1305,7 +1305,7 @@ menu_bckp_rstr() {
 
 menu_reboot() {
     while true; do
-        sub_header '🔄  REBOOT VPS  🔄'
+ sub_header 'REBOOT VPS'
         printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
         sub_row 1 "REBOOT MAINTENANT"          2 "REBOOT DANS X MINUTES"
         sub_row 3 "ANNULER REBOOT PROGRAMME"   0 ""
@@ -1322,7 +1322,7 @@ menu_reboot() {
 }
 menu_restart() {
     while true; do
-        sub_header '🔄  RESTART VPS  🔄'
+ sub_header 'RESTART VPS'
         printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
         sub_row 1 "RESTART ALL SERVICES"     2 "RESTART SSH"
         sub_row 3 "RESTART DROPBEAR"         4 "RESTART NGINX"
@@ -1350,7 +1350,7 @@ menu_restart() {
 
 menu_set_domain() {
     while true; do
-        sub_header '🌐  SET DOMAIN  🌐'
+ sub_header 'SET DOMAIN'
         printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
         printf "${BG}║${RESET}  ${LAV}Domaine:${RESET}    ${ORANGE}%-40s${RESET} ${BG}║${RESET}\n" "$DOMAIN"
         printf "${BG}║${RESET}  ${LAV}NS SlowDNS:${RESET} ${MAG}%-40s${RESET} ${BG}║${RESET}\n" "$NS4"
@@ -1407,7 +1407,7 @@ NV4EOF
 
 menu_cert_ssl() {
     while true; do
-        sub_header '🔐  CERT SSL  🔐'
+ sub_header 'CERT SSL'
         printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
         sub_row 1 "GENERER CERT LETSENCRYPT"  2 "LISTE CERTIFICATS"
         sub_row 3 "DETAILS CERTIFICAT"        4 "RENEW CERTIFICAT"
@@ -1459,7 +1459,7 @@ menu_quota_usage() {
     done
     local qd=$(fmt_bytes $BW_DAY) qw=$(fmt_bytes $BW_WEEK) qm=$(fmt_bytes $BW_MONTH)
     while true; do
-        sub_header '📊  QUOTA USAGE  📊'
+ sub_header 'QUOTA USAGE'
         printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
         printf "${BG}║${RESET}  ${LAV}Jour:${RESET}     %-44s${BG}║${RESET}\n" "$qd"
         printf "${BG}║${RESET}  ${LAV}Semaine:${RESET}  %-44s${BG}║${RESET}\n" "$qw"
@@ -1510,7 +1510,7 @@ menu_quota_usage() {
 
 menu_clear_cache() {
     while true; do
-        sub_header '🧹  CLEAR CACHE  🧹'
+ sub_header 'CLEAR CACHE'
         printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
         sub_row 1 "CACHE SYSTEME (drop_caches)" 2 "CACHE APT"
         sub_row 3 "FICHIERS TEMPORAIRES"        4 "TOUT NETTOYER"
@@ -1528,7 +1528,7 @@ menu_clear_cache() {
 
 menu_cek_bandwidth() {
     while true; do
-        sub_header '📈  CEK BANDWIDTH  📈'
+ sub_header 'CEK BANDWIDTH'
         local iface=$(ip route 2>/dev/null | awk '/default/{print $5; exit}')
         local rx=$(awk -v i="$iface" '$1 ~ i":"{print $2}' /proc/net/dev 2>/dev/null || echo 0)
         local tx=$(awk -v i="$iface" '$1 ~ i":"{print $10}' /proc/net/dev 2>/dev/null || echo 0)
@@ -1568,7 +1568,7 @@ menu_cek_bandwidth() {
 }
 
 menu_desinstalle() {
-    sub_header '🗑️  DÉSINSTALLATION  🗑️'
+ sub_header 'DESINSTALLATION'
     printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
     printf "${BG}║${RESET}  ${RED}╔════════════════════════════════════════════════════════════════╗${RESET}  ${BG}║${RESET}\n"
     printf "${BG}║${RESET}  ${RED}║${RESET}  ${WHITE}⚠  ATTENTION : Action irréversible  ⚠${RESET}                 ${RED}║${RESET}  ${BG}║${RESET}\n"
@@ -1626,7 +1626,7 @@ menu_desinstalle() {
 menu_bot_vip() {
     local SCRIPT_DIR="/root/Kighmu" BOT_BIN="$SCRIPT_DIR/bot2" BOTS_CLIENT="/etc/kighmu/bots.json" SERVICE_FILE="/etc/systemd/system/bot2.service"
     while true; do
-        sub_header '🤖  MENU BOT VIP  🤖'
+ sub_header 'MENU BOT VIP'
         printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
         sub_row 1 "STATUT BOT"              2 "COMPILER BOT"
         sub_row 3 "INSTALLER (SYSTEMD)"     4 "DEMARRER BOT"
@@ -1704,7 +1704,7 @@ EOF
 menu_change_banner() {
     local BANNER_FILE="/etc/ssh/banner.txt"
     while true; do
-        sub_header '📝  CHANGE BANNER SSH  📝'
+ sub_header 'CHANGE BANNER SSH'
         printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
         printf "${BG}║${RESET}  ${LAV}Banner actuel:${RESET}                                          ${BG}║${RESET}\n"
         if [[ -f "$BANNER_FILE" ]]; then
@@ -1757,8 +1757,8 @@ BANEOF
                 case $bc in
                     1) cat > "$BANNER_FILE" << 'BAN1'
 ╔═══════════════════════════════════════════════════════════════╗
-║            🚀 KIGHMU PREMIUM VPN - SERVER ONLINE 🚀         ║
-║            ⚠ CONNEXION NON AUTORISEE INTERDITE ⚠           ║
+║           KIGHMU PREMIUM VPN - SERVER ONLINE              ║
+║         CONNEXION NON AUTORISEE INTERDITE                 ║
 ╚═══════════════════════════════════════════════════════════════╝
 BAN1
                     ;;
@@ -1786,7 +1786,7 @@ BAN3
 menu_log_create_user() {
     local logfile="/var/log/kighmu-user.log" logfile_xray="/var/log/kighmu-xray-user.log"
     while true; do
-        sub_header '📋  LOG CREATE USER  📋'
+ sub_header 'LOG CREATE USER'
         printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
         sub_row 1 "VOIR DERNIERS LOGS"         2 "VOIR TOUS LES LOGS"
         sub_row 3 "FILTRER PAR UTILISATEUR"     4 "LOGS XRAY/V2RAY"
