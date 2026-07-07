@@ -1195,6 +1195,17 @@ menu_shadow() {
     done
 }
 
+sync_zivpn() {
+    local pwlist=$(awk -F'|' -v d="$(date +%Y-%m-%d)" '$3>=d {print $2}' /etc/zivpn/users.list 2>/dev/null | paste -sd, -)
+    [[ -z "$pwlist" ]] && return 0
+    jq --arg pw "$pwlist" '.auth.config = ($pw | split(","))' /etc/zivpn/config.json > /tmp/zivpn_tmp.json 2>/dev/null && mv /tmp/zivpn_tmp.json /etc/zivpn/config.json && systemctl restart zivpn 2>/dev/null || true
+}
+sync_hysteria() {
+    local pwlist=$(awk -F'|' -v d="$(date +%Y-%m-%d)" '$3>=d {print $2}' /etc/hysteria/users.txt 2>/dev/null | paste -sd, -)
+    [[ -z "$pwlist" ]] && return 0
+    jq --arg pw "$pwlist" '.auth.config = ($pw | split(","))' /etc/hysteria/config.json > /tmp/hy_tmp.json 2>/dev/null && mv /tmp/hy_tmp.json /etc/hysteria/config.json && systemctl restart hysteria 2>/dev/null || true
+}
+
 menu_zivpn() {
     while true; do
  sub_header 'MENU ZIVPN'
@@ -1206,14 +1217,14 @@ menu_zivpn() {
         sub_footer
         prompt_sub "ZIVPN"
         case $SUB in
-            1) clear; echo -e "${CYAN}━━ Création ZIVPN ━━${RESET}"; read -rp "  Username: " u; read -rp "  Password: " p; read -rp "  Expire (jours): " e; local exp=$(date -d "+${e}days" +%Y-%m-%d); if echo "$u|$p|$exp" >> /etc/zivpn/users.list 2>/dev/null; then echo -e "${GREEN}  ✅ UTILISATEUR CREE${RESET}"; echo; echo -e "  🌐 Domaine : ${WHITE}${DOMAIN}${RESET}"; echo -e "  🔐 Password : ${WHITE}${p}${RESET}"; echo -e "  📅 Expire : ${WHITE}${exp}${RESET}"; else echo -e "${RED}  ✗ Échec${RESET}"; fi; pause;;
-            2) clear; echo -e "${CYAN}━━ Suppression ━━${RESET}"; read -rp "  Username: " u; sed -i "/^$u|/d" /etc/zivpn/users.list 2>/dev/null || true; echo -e "${GREEN}  ✓ Supprimé${RESET}"; pause;;
+            1) clear; echo -e "${CYAN}━━ Création ZIVPN ━━${RESET}"; read -rp "  Username: " u; read -rp "  Password: " p; read -rp "  Expire (jours): " e; local exp=$(date -d "+${e}days" +%Y-%m-%d); if echo "$u|$p|$exp" >> /etc/zivpn/users.list 2>/dev/null; then echo -e "${GREEN}  ✅ UTILISATEUR CREE${RESET}"; sync_zivpn; echo; echo -e "  🌐 Domaine : ${WHITE}${DOMAIN}${RESET}"; echo -e "  🔐 Password : ${WHITE}${p}${RESET}"; echo -e "  📅 Expire : ${WHITE}${exp}${RESET}"; else echo -e "${RED}  ✗ Échec${RESET}"; fi; pause;;
+            2) clear; echo -e "${CYAN}━━ Suppression ━━${RESET}"; read -rp "  Username: " u; sed -i "/^$u|/d" /etc/zivpn/users.list 2>/dev/null || true; echo -e "${GREEN}  ✓ Supprimé${RESET}"; sync_zivpn; pause;;
             3) clear; echo -e "${CYAN}━━ Liste ━━${RESET}"; [[ -f /etc/zivpn/users.list ]] && cat /etc/zivpn/users.list | awk -F'|' '{print "  " $1 " → " $3}' || echo "  Aucun"; pause;;
-            4) clear; echo -e "${CYAN}━━ Renew ━━${RESET}"; read -rp "  Username: " u; read -rp "  Jours: " e; sed -i "/^$u|/s|[^|]*$|$(date -d "+${e}days" +%Y-%m-%d)|" /etc/zivpn/users.list 2>/dev/null && echo -e "${GREEN}  ✓ Prolongé${RESET}"; pause;;
-            5) clear; echo -e "${CYAN}━━ Trial ━━${RESET}"; read -rp "  Username: " u; read -rp "  Password: " p; echo "$u|$p|$(date -d "+1day" +%Y-%m-%d)" >> /etc/zivpn/users.list && echo -e "${GREEN}  ✓ Trial $u créé${RESET}"; pause;;
+            4) clear; echo -e "${CYAN}━━ Renew ━━${RESET}"; read -rp "  Username: " u; read -rp "  Jours: " e; sed -i "/^$u|/s|[^|]*$|$(date -d "+${e}days" +%Y-%m-%d)|" /etc/zivpn/users.list 2>/dev/null && echo -e "${GREEN}  ✓ Prolongé${RESET}"; sync_zivpn; pause;;
+            5) clear; echo -e "${CYAN}━━ Trial ━━${RESET}"; read -rp "  Username: " u; read -rp "  Password: " p; echo "$u|$p|$(date -d "+1day" +%Y-%m-%d)" >> /etc/zivpn/users.list && echo -e "${GREEN}  ✓ Trial $u créé${RESET}"; sync_zivpn; pause;;
             6) clear; echo -e "${CYAN}━━ Check ━━${RESET}"; read -rp "  Username: " u; awk -F'|' -v u="$u" '$1==u{print "  Expire: " $3}' /etc/zivpn/users.list 2>/dev/null || echo "  Introuvable"; pause;;
-            7) clear; echo -e "${CYAN}━━ Config ━━${RESET}"; echo "  ${DOMAIN:-$IP}:20000 (UDP)"; pause;;
-            8) clear; echo -e "${CYAN}━━ Suppression expirés ━━${RESET}"; local t=$(date +%s); [[ -f /etc/zivpn/users.list ]] && awk -F'|' -v t="$t" 'system("date -d "$3" +%s") >= t' /etc/zivpn/users.list > /tmp/zu.list && mv /tmp/zu.list /etc/zivpn/users.list; echo -e "${GREEN}  ✓ Nettoyé${RESET}"; pause;;
+            7) clear; echo -e "${CYAN}━━ Config ━━${RESET}"; echo "  ${DOMAIN:-$IP}:5667 (UDP)"; pause;;
+            8) clear; echo -e "${CYAN}━━ Suppression expirés ━━${RESET}"; local t=$(date +%s); [[ -f /etc/zivpn/users.list ]] && awk -F'|' -v t="$t" 'system("date -d "$3" +%s") >= t' /etc/zivpn/users.list > /tmp/zu.list 2>/dev/null && mv /tmp/zu.list /etc/zivpn/users.list; echo -e "${GREEN}  ✓ Nettoyé${RESET}"; sync_zivpn; pause;;
             0|q) break ;;
         esac
     done
@@ -1230,14 +1241,14 @@ menu_hysteria() {
         sub_footer
         prompt_sub "HYSTERIA"
         case $SUB in
-            1) clear; echo -e "${CYAN}━━ Création Hysteria ━━${RESET}"; read -rp "  Username: " u; read -rp "  Password: " p; read -rp "  Expire (jours): " e; local exp=$(date -d "+${e}days" +%Y-%m-%d); if echo "$u|$p|$exp" >> /etc/hysteria/users.txt 2>/dev/null; then echo -e "${GREEN}  ✅ UTILISATEUR CREE${RESET}"; echo; echo -e "  🌐 Domaine : ${WHITE}${DOMAIN}${RESET}"; echo -e "  🎭 Obfs : ${WHITE}hysteria${RESET}"; echo -e "  🔐 Password : ${WHITE}${p}${RESET}"; echo -e "  📅 Expire : ${WHITE}${exp}${RESET}"; echo -e "  🔌 Port : ${WHITE}20000-50000${RESET}"; else echo -e "${RED}  ✗ Échec${RESET}"; fi; pause;;
-            2) clear; echo -e "${CYAN}━━ Suppression ━━${RESET}"; read -rp "  Username: " u; sed -i "/^$u|/d" /etc/hysteria/users.txt 2>/dev/null || true; echo -e "${GREEN}  ✓ Supprimé${RESET}"; pause;;
+            1) clear; echo -e "${CYAN}━━ Création Hysteria ━━${RESET}"; read -rp "  Username: " u; read -rp "  Password: " p; read -rp "  Expire (jours): " e; local exp=$(date -d "+${e}days" +%Y-%m-%d); if echo "$u|$p|$exp" >> /etc/hysteria/users.txt 2>/dev/null; then echo -e "${GREEN}  ✅ UTILISATEUR CREE${RESET}"; sync_hysteria; echo; echo -e "  🌐 Domaine : ${WHITE}${DOMAIN}${RESET}"; echo -e "  🎭 Obfs : ${WHITE}hysteria${RESET}"; echo -e "  🔐 Password : ${WHITE}${p}${RESET}"; echo -e "  📅 Expire : ${WHITE}${exp}${RESET}"; echo -e "  🔌 Port : ${WHITE}20000-50000${RESET}"; else echo -e "${RED}  ✗ Échec${RESET}"; fi; pause;;
+            2) clear; echo -e "${CYAN}━━ Suppression ━━${RESET}"; read -rp "  Username: " u; sed -i "/^$u|/d" /etc/hysteria/users.txt 2>/dev/null || true; echo -e "${GREEN}  ✓ Supprimé${RESET}"; sync_hysteria; pause;;
             3) clear; echo -e "${CYAN}━━ Liste ━━${RESET}"; [[ -f /etc/hysteria/users.txt ]] && cat /etc/hysteria/users.txt | awk -F'|' '{print "  " $1 " → " $3}' || echo "  Aucun"; pause;;
-            4) clear; echo -e "${CYAN}━━ Renew ━━${RESET}"; read -rp "  Username: " u; read -rp "  Jours: " e; sed -i "/^$u|/s|[^|]*$|$(date -d "+${e}days" +%Y-%m-%d)|" /etc/hysteria/users.txt 2>/dev/null && echo -e "${GREEN}  ✓ Prolongé${RESET}"; pause;;
-            5) clear; echo -e "${CYAN}━━ Trial ━━${RESET}"; read -rp "  Username: " u; read -rp "  Password: " p; echo "$u|$p|$(date -d "+1day" +%Y-%m-%d)" >> /etc/hysteria/users.txt && echo -e "${GREEN}  ✓ Trial $u créé${RESET}"; pause;;
+            4) clear; echo -e "${CYAN}━━ Renew ━━${RESET}"; read -rp "  Username: " u; read -rp "  Jours: " e; sed -i "/^$u|/s|[^|]*$|$(date -d "+${e}days" +%Y-%m-%d)|" /etc/hysteria/users.txt 2>/dev/null && echo -e "${GREEN}  ✓ Prolongé${RESET}"; sync_hysteria; pause;;
+            5) clear; echo -e "${CYAN}━━ Trial ━━${RESET}"; read -rp "  Username: " u; read -rp "  Password: " p; echo "$u|$p|$(date -d "+1day" +%Y-%m-%d)" >> /etc/hysteria/users.txt && echo -e "${GREEN}  ✓ Trial $u créé${RESET}"; sync_hysteria; pause;;
             6) clear; echo -e "${CYAN}━━ Check ━━${RESET}"; read -rp "  Username: " u; awk -F'|' -v u="$u" '$1==u{print "  Expire: " $3}' /etc/hysteria/users.txt 2>/dev/null || echo "  Introuvable"; pause;;
-            7) clear; echo -e "${CYAN}━━ Config ━━${RESET}"; echo "  ${DOMAIN:-$IP}:5401 (UDP)"; pause;;
-            8) clear; echo -e "${CYAN}━━ Suppression expirés ━━${RESET}"; local t=$(date +%s); [[ -f /etc/hysteria/users.txt ]] && awk -F'|' -v t="$t" 'system("date -d "$3" +%s") >= t' /etc/hysteria/users.txt > /tmp/hy.list && mv /tmp/hy.list /etc/hysteria/users.txt; echo -e "${GREEN}  ✓ Nettoyé${RESET}"; pause;;
+            7) clear; echo -e "${CYAN}━━ Config ━━${RESET}"; echo "  ${DOMAIN:-$IP}:20000 (UDP)"; pause;;
+            8) clear; echo -e "${CYAN}━━ Suppression expirés ━━${RESET}"; local t=$(date +%s); [[ -f /etc/hysteria/users.txt ]] && awk -F'|' -v t="$t" 'system("date -d "$3" +%s") >= t' /etc/hysteria/users.txt > /tmp/hy.list 2>/dev/null && mv /tmp/hy.list /etc/hysteria/users.txt; echo -e "${GREEN}  ✓ Nettoyé${RESET}"; sync_hysteria; pause;;
             0|q) break ;;
         esac
     done
