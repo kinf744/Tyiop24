@@ -351,15 +351,24 @@ delete_xray_user() {
 # XRAY - DIAGNOSTIC + RÉPARATION + WATCHDOG
 # ================================================
 xray_gen_service() {
-    cat > /etc/systemd/system/xray.service << 'XSVCEOF'
+    cat > /etc/systemd/system/xray.service << 'XSVCEOF2'
 [Unit]
-Description=Xray Service; After=network-online.target nss-lookup.target; Wants=network-online.target; StartLimitIntervalSec=0
+Description=Xray Service
+After=network-online.target nss-lookup.target
+Wants=network-online.target
+StartLimitIntervalSec=0
 [Service]
-User=root; CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE; AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
-NoNewPrivileges=true; ExecStart=/usr/local/bin/xray -config /etc/xray/config.json; Restart=always; RestartSec=5s; LimitNOFILE=1048576
+User=root
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
+NoNewPrivileges=true
+ExecStart=/usr/local/bin/xray -config /etc/xray/config.json
+Restart=always
+RestartSec=5s
+LimitNOFILE=1048576
 [Install]
 WantedBy=multi-user.target
-XSVCEOF
+XSVCEOF2
 }
 xray_diagnostic() {
     local errors=0 fixes=0
@@ -444,21 +453,27 @@ WDEOF
     (crontab -l 2>/dev/null; echo "* * * * * /etc/kighmu/xray-watchdog.sh") | crontab - 2>/dev/null; log "Cron ajouté (toutes les minutes)"
     cat > /etc/systemd/system/xray-watchdog.service << 'SVCEOF'
 [Unit]
-Description=Xray Watchdog Service; After=network.target
+Description=Xray Watchdog Service
+After=network.target
 [Service]
-Type=oneshot; ExecStart=/etc/kighmu/xray-watchdog.sh; User=root
+Type=oneshot
+ExecStart=/etc/kighmu/xray-watchdog.sh
+User=root
 SVCEOF
     cat > /etc/systemd/system/xray-watchdog.timer << 'TMREOF'
 [Unit]
-Description=Xray Watchdog Timer; Requires=xray-watchdog.service
+Description=Xray Watchdog Timer
+Requires=xray-watchdog.service
 [Timer]
-OnBootSec=30; OnUnitActiveSec=120; Unit=xray-watchdog.service
+OnBootSec=30
+OnUnitActiveSec=120
+Unit=xray-watchdog.service
 [Install]
 WantedBy=timers.target
 TMREOF
     systemctl daemon-reload; systemctl enable --now xray-watchdog.timer 2>/dev/null || true; log "systemd timer activé"
     if ! grep -q "xray-watchdog" /etc/rc.local 2>/dev/null; then
-        mkdir -p /etc; [[ ! -f /etc/rc.local ]] && echo '#!/bin/bash\nexit 0' > /etc/rc.local && chmod +x /etc/rc.local
+        mkdir -p /etc; [[ ! -f /etc/rc.local ]] && printf '#!/bin/bash\nexit 0\n' > /etc/rc.local && chmod +x /etc/rc.local
         sed -i '/^exit 0/i /etc/kighmu/xray-watchdog.sh' /etc/rc.local 2>/dev/null || true; log "rc.local mis à jour"
     fi
     echo -e "${GREEN}  ✅ Watchdog 4 couches installé :${RESET}"
