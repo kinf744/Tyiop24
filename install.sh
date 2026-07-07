@@ -1432,8 +1432,14 @@ gen_uuid() { cat /proc/sys/kernel/random/uuid 2>/dev/null || uuidgen 2>/dev/null
 
 sync_xray() {
     local users=$(cat /etc/xray/users.json 2>/dev/null || echo '{"vmess":[],"vless":[],"trojan":[],"shadow":[]}')
+    # Sanitize: uuid→id (bug panel), uuid→password (trojan)
+    local sanitized=$(echo "$users" | jq '
+        .vmess |= map(if has("uuid") then .id = .uuid | del(.uuid) else . end) |
+        .vless |= map(if has("uuid") then .id = .uuid | del(.uuid) else . end) |
+        .trojan |= map(if has("uuid") then .password = .uuid | del(.uuid) else . end)
+    ' 2>/dev/null || echo "$users")
     local tmp=$(mktemp)
-    cat /etc/xray/config.json | jq --argjson users "$users" '
+    cat /etc/xray/config.json | jq --argjson users "$sanitized" '
         if (.inbounds | any(.tag == "api")) then . else
             .inbounds += [{"tag":"api","port":10085,"listen":"127.0.0.1","protocol":"dokodemo-door","settings":{"address":"127.0.0.1"}}]
         end |

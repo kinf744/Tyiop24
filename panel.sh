@@ -319,7 +319,7 @@ async function restartService(svc) {
 // ── Synchronise /etc/xray/users.json avec les créations/suppressions du panel ──
 // Ce fichier est lu par menu_6.sh pour afficher et gérer les utilisateurs.
 // Format attendu : { "vmess": [...], "vless": [...], "trojan": [...] }
-// Chaque entrée : { uuid, email, name, tag, limit_gb, used_gb, expire }
+// ⚠️ Xray attend "id" pour vmess/vless et "password" pour trojan — PAS "uuid"
 function _xraySyncUsersJson(username, proto, uuid, action) {
   const usersPath = '/etc/xray/users.json';
   try {
@@ -329,25 +329,27 @@ function _xraySyncUsersJson(username, proto, uuid, action) {
     if (!data.trojan) data.trojan = [];
 
     if (action === 'add') {
-      // Vérifier doublon
-      const already = data[proto]?.some(u => u.uuid === uuid || u.email === username || u.name === username);
+      const idKey = proto === 'trojan' ? 'password' : 'id';
+      const already = data[proto]?.some(u => u[idKey] === uuid || u.email === username || u.name === username);
       if (!already) {
         const tag = `${proto}_${username}_${uuid.slice(0, 8)}`;
-        data[proto].push({
-          uuid,
+        const entry = {
           email:    tag,
           name:     username,
           tag:      tag,
           limit_gb: 0,
           used_gb:  0,
           expire:   'N/A'
-        });
+        };
+        entry[idKey] = uuid;
+        data[proto].push(entry);
         writeJson(usersPath, data);
-        console.log(`[XRAY-SYNC] users.json : ajout ${proto}/${username}`);
+        console.log(`[XRAY-SYNC] users.json : ajout ${proto}/${username} (${idKey})`);
       }
     } else if (action === 'remove') {
+      const idKey = proto === 'trojan' ? 'password' : 'id';
       const before = (data[proto] || []).length;
-      data[proto] = (data[proto] || []).filter(u => u.uuid !== uuid && u.name !== username && u.email !== username);
+      data[proto] = (data[proto] || []).filter(u => u[idKey] !== uuid && u.name !== username && u.email !== username);
       if (data[proto].length !== before) {
         writeJson(usersPath, data);
         console.log(`[XRAY-SYNC] users.json : suppression ${proto}/${username}`);

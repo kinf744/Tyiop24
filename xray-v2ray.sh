@@ -267,8 +267,15 @@ xray_build_config() {
     local users; users=$(cat "$XRAY_USERS" 2>/dev/null || echo '{"vmess":[],"vless":[],"trojan":[],"shadow":[]}')
     local tmp; tmp=$(mktemp)
 
+    # Sanitize: convert "uuid" → "id" (bug legacy panel), ensure trojan has "password"
+    local sanitized; sanitized=$(echo "$users" | jq '
+        .vmess |= map(if has("uuid") then .id = .uuid | del(.uuid) else . end) |
+        .vless |= map(if has("uuid") then .id = .uuid | del(.uuid) else . end) |
+        .trojan |= map(if has("uuid") then .password = .uuid | del(.uuid) else . end)
+    ' 2>/dev/null || echo "$users")
+
     # Update each inbound with the clients array
-    echo "$config" | jq --argjson users "$users" '
+    echo "$config" | jq --argjson users "$sanitized" '
         (.inbounds[] | select(.tag == "VMess-TCP")   .settings.clients) = $users.vmess |
         (.inbounds[] | select(.tag == "VMess-WS")    .settings.clients) = $users.vmess |
         (.inbounds[] | select(.tag == "VMess-TLS")   .settings.clients) = $users.vmess |
