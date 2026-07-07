@@ -501,6 +501,98 @@ TCEOF
     log "Collecte trafic OK (cron 2min)"
 }
 
+# ── XRAY WATCHDOG PERMANENT ──
+setup_xray_watchdog() {
+    step_header '🛡️  Xray Watchdog Permanent  🛡️'
+    mkdir -p /etc/kighmu
+
+    cat > /etc/kighmu/xray-watchdog.sh << 'WDEOF'
+#!/bin/bash
+# Xray Watchdog — vérifie et répare Xray toutes les 60s
+XRAY_BIN="/usr/local/bin/xray"
+XRAY_CONFIG="/etc/xray/config.json"
+WATCHDOG_LOG="/var/log/xray-watchdog.log"
+MAX_RESTART=5
+RESTART_WINDOW=300
+
+log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$WATCHDOG_LOG"; }
+
+if systemctl is-active --quiet xray 2>/dev/null; then exit 0; fi
+
+log "[WATCHDOG] Xray INACTIF — tentative de réparation..."
+if [[ ! -x "$XRAY_BIN" ]]; then log "Binaire Xray manquant !"; exit 1; fi
+if [[ -f "$XRAY_CONFIG" ]] && ! jq empty "$XRAY_CONFIG" 2>/dev/null; then
+    log "Config JSON invalide ! Sauvegarde..."
+    cp "$XRAY_CONFIG" "${XRAY_CONFIG}.corrupted.$(date +%s)"
+fi
+if [[ -f /etc/xray/xray.crt ]] && [[ -f /etc/xray/xray.key ]]; then
+    if ! openssl x509 -checkend 0 -noout -in /etc/xray/xray.crt 2>/dev/null; then
+        log "Certificat TLS expiré — regénération..."
+        local domain; domain=$(cat /etc/xray/domain 2>/dev/null || hostname -I | awk '{print $1}')
+        openssl req -x509 -newkey rsa:2048 -keyout /etc/xray/xray.key -out /etc/xray/xray.crt -nodes -days 3650 -subj "/CN=${domain}" 2>/dev/null
+        cat /etc/xray/xray.crt /etc/xray/xray.key > /etc/xray/xray.pem
+        chmod 600 /etc/xray/xray.key /etc/xray/xray.pem
+    fi
+fi
+for port in 10001 10002 10003 10004 10005 10006 10007 10008 10009 10010 10011 10012 10013 10014 10015 10016 10017 10085; do
+    local pid; pid=$(ss -tlnp | grep ":$port " | grep -v xray | grep -oP 'pid=\K[0-9]+' | head -1)
+    if [[ -n "$pid" ]]; then log "Port $port bloqué par PID $pid — libération..."; kill "$pid" 2>/dev/null || true; sleep 1; fi
+done
+log "Démarrage de Xray..."
+systemctl start xray 2>/dev/null
+sleep 3
+if systemctl is-active --quiet xray 2>/dev/null; then
+    log "[WATCHDOG] Xray redémarré avec succès !"
+else
+    log "[WATCHDOG] ÉCHEC démarrage Xray"
+    journalctl -u xray -n 20 --no-pager >> "$WATCHDOG_LOG" 2>/dev/null
+fi
+WDEOF
+    chmod +x /etc/kighmu/xray-watchdog.sh
+
+    # Cron toutes les minutes
+    crontab -l 2>/dev/null | grep -v "xray-watchdog\|xray.*is-active" | crontab - 2>/dev/null || true
+    (crontab -l 2>/dev/null; echo "* * * * * /etc/kighmu/xray-watchdog.sh") | crontab - 2>/dev/null
+
+    # systemd timer
+    cat > /etc/systemd/system/xray-watchdog.service << 'SVCEOF'
+[Unit]
+Description=Xray Watchdog Service
+After=network.target
+[Service]
+Type=oneshot
+ExecStart=/etc/kighmu/xray-watchdog.sh
+User=root
+SVCEOF
+    cat > /etc/systemd/system/xray-watchdog.timer << 'TMREOF'
+[Unit]
+Description=Xray Watchdog Timer (toutes les 2 minutes)
+[Timer]
+OnBootSec=30
+OnUnitActiveSec=120
+Unit=xray-watchdog.service
+[Install]
+WantedBy=timers.target
+TMREOF
+    systemctl daemon-reload
+    systemctl enable --now xray-watchdog.timer 2>/dev/null || true
+
+    # rc.local
+    if ! grep -q "xray-watchdog" /etc/rc.local 2>/dev/null; then
+        [[ ! -f /etc/rc.local ]] && echo '#!/bin/bash\nexit 0' > /etc/rc.local && chmod +x /etc/rc.local
+        sed -i '/^exit 0/i /etc/kighmu/xray-watchdog.sh' /etc/rc.local 2>/dev/null || true
+    fi
+
+    # logrotate
+    cat > /etc/logrotate.d/xray-watchdog << 'LOGREOF'
+/var/log/xray-watchdog.log {
+    daily; rotate 7; compress; delaycompress; missingok; notifempty; copytruncate
+}
+LOGREOF
+
+    log "Xray watchdog permanent installé (cron 60s + timer 120s + boot)"
+}
+
 # ── SERVICE BANDWIDTH SSH ──
 setup_bandwidth_service() {
     step_header '📈  Service Bandwidth SSH  📈'
@@ -638,6 +730,7 @@ full_install() {
     source "$SCRIPT_DIR/xray-v2ray.sh" 2>/dev/null || true
     install_xray 2>/dev/null || true
     install_v2ray 2>/dev/null || true
+    setup_xray_watchdog 2>/dev/null || true
 
     log "Installation des services UDP..."
     source "$SCRIPT_DIR/udp.sh" 2>/dev/null || true
