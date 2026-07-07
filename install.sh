@@ -871,67 +871,33 @@ fmt_bytes() {
     awk "BEGIN{printf \"%.2f TB\", $b/1099511627776}"
 }
 
-# ── Collecte bande passante ──
+# ── Collecte bande passante via vnStat ──
 IFACE=$(ip route 2>/dev/null | awk '/default/{print $5; exit}' || echo "eth0")
 BW_DIR="/etc/kighmu/bandwidth"
 mkdir -p "$BW_DIR"
 
-get_bytes() {
-    awk -v iface="$IFACE" '$1 ~ iface":" {rx=$2; tx=$10; print rx+tx}' /proc/net/dev 2>/dev/null || echo 0
-}
-
-CUR_BYTES=$(get_bytes)
-TODAY=$(date +%Y-%m-%d)
-PREV_FILE="$BW_DIR/last_total"
-
-# Migration unique : anciens fichiers contiennent des cumulatifs → deltas
-if [[ ! -f "$PREV_FILE" ]]; then
-    LAST=0
-    for f in $(ls "$BW_DIR"/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9] 2>/dev/null | sort); do
-        val=$(<"$f")
-        delta=$((val - LAST)); ((delta < 0)) && delta=$val
-        echo "$delta" > "$f"
-        LAST=$val
-    done
-    rm -f "$BW_DIR"/*.prev 2>/dev/null
+# vnStat : total VPS traffic (rx + tx) par jour/semaine/mois
+VNSTAT_DB=$(vnstat --json 2>/dev/null)
+BW_DAY=0; BW_WEEK=0; BW_MONTH=0
+if [[ -n "$VNSTAT_DB" ]]; then
+    BW_DAY=$(echo "$VNSTAT_DB" | python3 -c "
+import sys, json
+d=json.load(sys.stdin)
+t=d['interfaces'][0]['traffic']
+last=t['day'][-1]
+print(int(last['rx'])+int(last['tx']))" 2>/dev/null)
+    BW_WEEK=$(echo "$VNSTAT_DB" | python3 -c "
+import sys, json
+d=json.load(sys.stdin)
+days=d['interfaces'][0]['traffic']['day']
+print(sum(int(dd['rx'])+int(dd['tx']) for dd in days[-7:]))" 2>/dev/null)
+    BW_MONTH=$(echo "$VNSTAT_DB" | python3 -c "
+import sys, json
+d=json.load(sys.stdin)
+last=d['interfaces'][0]['traffic']['month'][-1]
+print(int(last['rx'])+int(last['tx']))" 2>/dev/null)
 fi
-
-# Dernière valeur cumulative lue
-if [[ -f "$PREV_FILE" ]]; then
-    PREV_TOTAL=$(<"$PREV_FILE")
-else
-    # Première exécution : initialiser pour éviter un delta monstrueux
-    PREV_TOTAL=$CUR_BYTES
-fi
-
-# Delta depuis la dernière vérification
-BW_DAY=$((CUR_BYTES - PREV_TOTAL))
-(( BW_DAY < 0 )) && BW_DAY=$CUR_BYTES
-
-# Sauvegarde pour le prochain delta
-echo "$CUR_BYTES" > "$PREV_FILE"
-
-# Cumul dans le fichier journalier (delta du jour)
-ACCUM_FILE="$BW_DIR/$TODAY"
-if [[ -f "$ACCUM_FILE" ]]; then
-    PREV_ACCUM=$(<"$ACCUM_FILE")
-    echo $((PREV_ACCUM + BW_DAY)) > "$ACCUM_FILE"
-else
-    echo "$BW_DAY" > "$ACCUM_FILE"
-fi
-BW_DAY=$(<"$ACCUM_FILE")
-
-# Semaine : somme des 7 derniers fichiers jour (deltas)
-BW_WEEK=0
-for d in $(seq 0 6 | xargs -I{} date -d "{} days ago" +%Y-%m-%d 2>/dev/null); do
-    [[ -f "$BW_DIR/$d" && -s "$BW_DIR/$d" ]] && BW_WEEK=$((BW_WEEK + $(<"$BW_DIR/$d")))
-done
-
-# Mois : somme des 30 derniers fichiers jour (deltas)
-BW_MONTH=0
-for d in $(seq 0 30 | xargs -I{} date -d "{} days ago" +%Y-%m-%d 2>/dev/null); do
-    [[ -f "$BW_DIR/$d" && -s "$BW_DIR/$d" ]] && BW_MONTH=$((BW_MONTH + $(<"$BW_DIR/$d")))
-done
+: "${BW_DAY:=0}" "${BW_WEEK:=0}" "${BW_MONTH:=0}"
 
 BW_DAY_H=$(fmt_bytes $BW_DAY)
 BW_WEEK_H=$(fmt_bytes $BW_WEEK)
