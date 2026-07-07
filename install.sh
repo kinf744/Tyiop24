@@ -802,17 +802,6 @@ CPU_USED=$(top -bn1 2>/dev/null | awk '/Cpu\(s\)/ {print $2}' | cut -d. -f1 || e
 KERNEL=$(uname -r 2>/dev/null || echo "?")
 OS_NAME=$(. /etc/os-release 2>/dev/null && echo "$PRETTY_NAME" || echo "$KERNEL")
 
-# Comptes
-N_SSH=$(awk -F: '$7~/bash|sh/ && $3>=1000' /etc/passwd 2>/dev/null | wc -l)
-N_VMESS=$(jq '.vmess | length' /etc/xray/users.json 2>/dev/null || echo 0)
-N_VLESS=$(jq '.vless | length' /etc/xray/users.json 2>/dev/null || echo 0)
-N_TROJAN=$(jq '.trojan | length' /etc/xray/users.json 2>/dev/null || echo 0)
-N_SHADOW=$(jq '.shadow | length' /etc/xray/users.json 2>/dev/null || echo 0)
-N_V2RAY=$(jq '.vless | length' /etc/v2ray/users.json 2>/dev/null || echo 0)
-N_HY=$([[ -f /etc/hysteria/users.txt ]] && awk -F'|' -v d="$(date +%Y-%m-%d)" '$3>=d' /etc/hysteria/users.txt | wc -l || echo 0)
-N_ZIVPN=$([[ -f /etc/zivpn/users.list ]] && awk -F'|' -v d="$(date +%Y-%m-%d)" '$3>=d' /etc/zivpn/users.list | wc -l || echo 0)
-N_TOTAL=$((N_SSH + N_VMESS + N_VLESS + N_TROJAN + N_SHADOW + N_V2RAY + N_HY + N_ZIVPN))
-
 # Statuts services
 svc() {
     if systemctl cat "$1.service" &>/dev/null 2>&1; then
@@ -821,10 +810,6 @@ svc() {
         echo -e "${DIM}---${RESET}"
     fi
 }
-S_SSH=$(svc ssh); S_DROP=$(svc dropbear-custom); S_NGINX=$(svc nginx)
-S_HAPROXY=$(svc haproxy); S_XRAY=$(svc xray); S_V2RAY=$(svc v2ray)
-S_HY=$(svc hysteria); S_ZIVPN=$(svc zivpn); S_SSHWS=$(svc sshws)
-
 # ── Ligne services alignée (3 colonnes de 18 chars) ──
 svc_line() {
     local line="" w=18
@@ -845,6 +830,19 @@ HL() { printf "${BG}${CYAN}%s${RESET}\n" "$(printf '┄%.0s' {1..64})"; }
 
 draw_panel() {
     echo -e "${CLR}${BG}"
+
+    # ── Comptes (rafraîchis à chaque affichage) ──
+    local N_SSH=$(awk -F: '$7~/bash|sh/ && $3>=1000' /etc/passwd 2>/dev/null | wc -l)
+    local N_VMESS=$(jq '.vmess | length' /etc/xray/users.json 2>/dev/null || echo 0)
+    local N_VLESS=$(jq '.vless | length' /etc/xray/users.json 2>/dev/null || echo 0)
+    local N_TROJAN=$(jq '.trojan | length' /etc/xray/users.json 2>/dev/null || echo 0)
+    local N_SHADOW=$(jq '.shadow | length' /etc/xray/users.json 2>/dev/null || echo 0)
+    local N_V2RAY=$(jq '.vless | length' /etc/v2ray/users.json 2>/dev/null || echo 0)
+    local N_HY=$([[ -f /etc/hysteria/users.txt ]] && awk -F'|' -v d="$(date +%Y-%m-%d)" '$3>=d' /etc/hysteria/users.txt | wc -l || echo 0)
+    local N_ZIVPN=$([[ -f /etc/zivpn/users.list ]] && awk -F'|' -v d="$(date +%Y-%m-%d)" '$3>=d' /etc/zivpn/users.list | wc -l || echo 0)
+    local S_SSH=$(svc ssh) S_DROP=$(svc dropbear-custom) S_NGINX=$(svc nginx)
+    local S_HAPROXY=$(svc haproxy) S_XRAY=$(svc xray) S_V2RAY=$(svc v2ray)
+    local S_HY=$(svc hysteria) S_ZIVPN=$(svc zivpn) S_SSHWS=$(svc sshws)
 
     # ── Bandeau titre ──
     HL
@@ -1208,7 +1206,7 @@ menu_zivpn() {
         sub_footer
         prompt_sub "ZIVPN"
         case $SUB in
-            1) clear; echo -e "${CYAN}━━ Création ZIVPN ━━${RESET}"; read -rp "  Username: " u; read -rp "  Password: " p; read -rp "  Expire (jours): " e; echo "$u|$p|$(date -d "+${e}days" +%Y-%m-%d)" >> /etc/zivpn/users.list && echo -e "${GREEN}  ✓ $u créé${RESET}" || echo -e "${RED}  ✗ Échec${RESET}"; pause;;
+            1) clear; echo -e "${CYAN}━━ Création ZIVPN ━━${RESET}"; read -rp "  Username: " u; read -rp "  Password: " p; read -rp "  Expire (jours): " e; local exp=$(date -d "+${e}days" +%Y-%m-%d); if echo "$u|$p|$exp" >> /etc/zivpn/users.list 2>/dev/null; then echo -e "${GREEN}  ✅ UTILISATEUR CREE${RESET}"; echo; echo -e "  🌐 Domaine : ${WHITE}${DOMAIN}${RESET}"; echo -e "  🔐 Password : ${WHITE}${p}${RESET}"; echo -e "  📅 Expire : ${WHITE}${exp}${RESET}"; else echo -e "${RED}  ✗ Échec${RESET}"; fi; pause;;
             2) clear; echo -e "${CYAN}━━ Suppression ━━${RESET}"; read -rp "  Username: " u; sed -i "/^$u|/d" /etc/zivpn/users.list 2>/dev/null || true; echo -e "${GREEN}  ✓ Supprimé${RESET}"; pause;;
             3) clear; echo -e "${CYAN}━━ Liste ━━${RESET}"; [[ -f /etc/zivpn/users.list ]] && cat /etc/zivpn/users.list | awk -F'|' '{print "  " $1 " → " $3}' || echo "  Aucun"; pause;;
             4) clear; echo -e "${CYAN}━━ Renew ━━${RESET}"; read -rp "  Username: " u; read -rp "  Jours: " e; sed -i "/^$u|/s|[^|]*$|$(date -d "+${e}days" +%Y-%m-%d)|" /etc/zivpn/users.list 2>/dev/null && echo -e "${GREEN}  ✓ Prolongé${RESET}"; pause;;
@@ -1232,7 +1230,7 @@ menu_hysteria() {
         sub_footer
         prompt_sub "HYSTERIA"
         case $SUB in
-            1) clear; echo -e "${CYAN}━━ Création Hysteria ━━${RESET}"; read -rp "  Username: " u; read -rp "  Password: " p; read -rp "  Expire (jours): " e; echo "$u|$p|$(date -d "+${e}days" +%Y-%m-%d)" >> /etc/hysteria/users.txt 2>/dev/null && echo -e "${GREEN}  ✓ $u créé${RESET}"; pause;;
+            1) clear; echo -e "${CYAN}━━ Création Hysteria ━━${RESET}"; read -rp "  Username: " u; read -rp "  Password: " p; read -rp "  Expire (jours): " e; local exp=$(date -d "+${e}days" +%Y-%m-%d); if echo "$u|$p|$exp" >> /etc/hysteria/users.txt 2>/dev/null; then echo -e "${GREEN}  ✅ UTILISATEUR CREE${RESET}"; echo; echo -e "  🌐 Domaine : ${WHITE}${DOMAIN}${RESET}"; echo -e "  🎭 Obfs : ${WHITE}hysteria${RESET}"; echo -e "  🔐 Password : ${WHITE}${p}${RESET}"; echo -e "  📅 Expire : ${WHITE}${exp}${RESET}"; echo -e "  🔌 Port : ${WHITE}20000-50000${RESET}"; else echo -e "${RED}  ✗ Échec${RESET}"; fi; pause;;
             2) clear; echo -e "${CYAN}━━ Suppression ━━${RESET}"; read -rp "  Username: " u; sed -i "/^$u|/d" /etc/hysteria/users.txt 2>/dev/null || true; echo -e "${GREEN}  ✓ Supprimé${RESET}"; pause;;
             3) clear; echo -e "${CYAN}━━ Liste ━━${RESET}"; [[ -f /etc/hysteria/users.txt ]] && cat /etc/hysteria/users.txt | awk -F'|' '{print "  " $1 " → " $3}' || echo "  Aucun"; pause;;
             4) clear; echo -e "${CYAN}━━ Renew ━━${RESET}"; read -rp "  Username: " u; read -rp "  Jours: " e; sed -i "/^$u|/s|[^|]*$|$(date -d "+${e}days" +%Y-%m-%d)|" /etc/hysteria/users.txt 2>/dev/null && echo -e "${GREEN}  ✓ Prolongé${RESET}"; pause;;
