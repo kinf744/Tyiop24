@@ -416,16 +416,83 @@ XRAY_API="${XRAY_API:-127.0.0.1:10085}"
 V2RAY_BIN="${V2RAY_BIN:-/usr/local/bin/v2ray}"
 V2RAY_API="${V2RAY_API:-127.0.0.1:10086}"
 DELTA_DIR="/var/lib/kighmu/ssh-counters"
+BW_DIR="/var/lib/kighmu/bandwidth"
 USER_FILE="/etc/kighmu/users.list"
 NFT="nft"
 TS="$(date '+%Y-%m-%d %H:%M:%S')"
-mkdir -p "$DELTA_DIR"
+mkdir -p "$DELTA_DIR" "$BW_DIR/sent"
 send_stats() { local resp; resp=$(curl -s --max-time 10 -X POST "${PANEL_URL}/api/report/traffic" -H "Content-Type: application/json" -H "x-report-secret: ${SECRET}" -d "$1" 2>/dev/null); echo "[${TS}] → ${resp:-no response}"; }
 _read_nft_counter() { ${NFT} list counter inet kighmu "$1" 2>/dev/null | grep -oP 'bytes \K\d+' || echo 0; }
 collect_xray() { [ ! -x "$XRAY_BIN" ] && return; local raw; raw=$("$XRAY_BIN" api statsquery --server="$XRAY_API" 2>/dev/null) || return; [[ -z "$raw" ]] && return; local json='{"stats":[' first=1 has_data=0; while IFS='|' read -r name value; do local user="${name%%>>>*}"; local traffic="${name##*>>>}"; [[ "$user" =~ ^(default|)$ ]] && continue; [[ "$value" == "0" ]] && continue; [[ $first -eq 0 ]] && json+=','; if [[ "$traffic" == "uplink" ]]; then json+="{\"username\":\"${user}\",\"upload_bytes\":${value},\"download_bytes\":0}"; else json+="{\"username\":\"${user}\",\"upload_bytes\":0,\"download_bytes\":${value}}"; fi; first=0; has_data=1; done < <(echo "$raw" | jq -r '.stat[]? | select(.name | test("user>>>")) | "\(.name)|\(.value)"' 2>/dev/null); json+=']}'; [[ $has_data -eq 1 ]] && send_stats "$json"; }
 collect_v2ray() { [ ! -x "$V2RAY_BIN" ] && return; local raw; raw=$("$V2RAY_BIN" api stats --server="$V2RAY_API" 2>/dev/null) || return; [[ -z "$raw" ]] && return; local json='{"stats":[' first=1 has_data=0; while IFS='|' read -r user up down; do [[ -z "$user" ]] && continue; [[ "$up" == "0" && "$down" == "0" ]] && continue; [[ $first -eq 0 ]] && json+=','; json+="{\"username\":\"${user}\",\"upload_bytes\":${up},\"download_bytes\":${down}}"; first=0; has_data=1; done < <(echo "$raw" | jq -r '.stat[]? | select(.name | test("user>>>")) | (.name / ">>>") as $p | "\($p[0])|\($p[2]//0)|\($p[3]//0)"' 2>/dev/null); json+=']}'; [[ $has_data -eq 1 ]] && send_stats "$json"; }
 collect_ssh() { [ ! -f "$USER_FILE" ] && return; command -v nft &>/dev/null || return; nft list table inet kighmu &>/dev/null || return; local json='{"stats":[' first=1 has_data=0; while IFS='|' read -r username _rest; do [ -z "$username" ] && continue; local uid; uid=$(id -u "$username" 2>/dev/null) || continue; local tag="ssh_${uid}"; local cur_out cur_in; cur_out=$(_read_nft_counter "${tag}_out"); cur_in=$(_read_nft_counter "${tag}_in"); local prev_out=0 prev_in=0; [ -f "${DELTA_DIR}/${username}.out" ] && prev_out=$(< "${DELTA_DIR}/${username}.out"); [ -f "${DELTA_DIR}/${username}.in" ] && prev_in=$(< "${DELTA_DIR}/${username}.in"); local delta_out=$(( cur_out - prev_out )); local delta_in=$(( cur_in - prev_in )); (( delta_out < 0 )) && delta_out=$cur_out; (( delta_in < 0 )) && delta_in=$cur_in; if (( delta_out > 0 || delta_in > 0 )); then echo "$cur_out" > "${DELTA_DIR}/${username}.out"; echo "$cur_in" > "${DELTA_DIR}/${username}.in"; [[ $first -eq 0 ]] && json+=','; json+="{\"username\":\"${username}\",\"upload_bytes\":${delta_in},\"download_bytes\":${delta_out}}"; first=0; has_data=1; fi; done < <(cat "$USER_FILE" 2>/dev/null); json+=']}'; [[ $has_data -eq 1 ]] && send_stats "$json"; }
-echo "[${TS}] KIGHMU collecte démarrée"; collect_xray; collect_v2ray; collect_ssh; echo "[${TS}] Terminé"
+collect_udp() {
+  command -v nft &>/dev/null || return
+  nft list table inet kighmu &>/dev/null || return
+  local SENT_DIR="$BW_DIR/sent"
+  local today
+  today=$(date +%F)
+  local json='{"stats":[' first=1 has_data=0
+  for proto in zivpn hysteria; do
+    local uf="" port=""
+    if [[ "$proto" == "zivpn" ]]; then
+      uf="/etc/zivpn/users.list"; port="5667"
+    else
+      uf="/etc/hysteria/users.txt"; port="20000"
+    fi
+    [[ ! -f "$uf" ]] && continue
+    local cur_in cur_out
+    cur_in=$(_read_nft_counter "udp_${proto}_in")
+    cur_out=$(_read_nft_counter "udp_${proto}_out")
+    [[ ! "$cur_in" =~ ^[0-9]+$ ]] && cur_in=0
+    [[ ! "$cur_out" =~ ^[0-9]+$ ]] && cur_out=0
+    local snap_in="$BW_DIR/udp_${proto}_global_in.snap"
+    local snap_out="$BW_DIR/udp_${proto}_global_out.snap"
+    local prev_in=0 prev_out=0
+    [[ -f "$snap_in" ]] && prev_in=$(< "$snap_in")
+    [[ -f "$snap_out" ]] && prev_out=$(< "$snap_out")
+    [[ ! "$prev_in" =~ ^[0-9]+$ ]] && prev_in=0
+    [[ ! "$prev_out" =~ ^[0-9]+$ ]] && prev_out=0
+    local delta_in=$(( cur_in - prev_in ))
+    local delta_out=$(( cur_out - prev_out ))
+    (( delta_in < 0 )) && delta_in=$cur_in
+    (( delta_out < 0 )) && delta_out=$cur_out
+    (( delta_in == 0 && delta_out == 0 )) && continue
+    echo "$cur_in" > "$snap_in"
+    echo "$cur_out" > "$snap_out"
+    local active_users=()
+    while IFS='|' read -r username _pass expire; do
+      [[ -z "$username" ]] && continue
+      [[ "$expire" < "$today" ]] && continue
+      active_users+=("$username")
+    done < "$uf"
+    local nb=${#active_users[@]}
+    (( nb == 0 )) && continue
+    local share_in=$(( delta_in / nb ))
+    local share_out=$(( delta_out / nb ))
+    for username in "${active_users[@]}"; do
+      local usagefile="$BW_DIR/udp_${proto}_${username}.usage"
+      local accum=0
+      [[ -f "$usagefile" ]] && accum=$(< "$usagefile")
+      [[ ! "$accum" =~ ^[0-9]+$ ]] && accum=0
+      accum=$(( accum + share_in + share_out ))
+      echo "$accum" > "$usagefile"
+      local sentfile="$SENT_DIR/udp_${proto}_${username}.sent"
+      local last_sent=0
+      [[ -f "$sentfile" ]] && last_sent=$(< "$sentfile")
+      [[ ! "$last_sent" =~ ^[0-9]+$ ]] && last_sent=0
+      local user_delta=$(( accum - last_sent ))
+      (( user_delta <= 0 )) && continue
+      echo "$accum" > "$sentfile"
+      [[ $first -eq 0 ]] && json+=","
+      json+="{\"username\":\"${username}\",\"upload_bytes\":${share_in},\"download_bytes\":${share_out}}"
+      first=0; has_data=1
+    done
+  done
+  json+=']}'
+  [[ $has_data -eq 1 ]] && send_stats "$json"
+}
+echo "[${TS}] KIGHMU collecte démarrée"; collect_xray; collect_v2ray; collect_ssh; collect_udp; echo "[${TS}] Terminé"
 TCEOF
     sed -i "s/__REPORT_SECRET__/${REPORT_SECRET}/g" /etc/kighmu/traffic-collect.sh
     chmod +x /etc/kighmu/traffic-collect.sh
