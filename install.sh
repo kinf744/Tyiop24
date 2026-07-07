@@ -1212,6 +1212,9 @@ sync_xray() {
     local users=$(cat /etc/xray/users.json 2>/dev/null || echo '{"vmess":[],"vless":[],"trojan":[],"shadow":[]}')
     local tmp=$(mktemp)
     cat /etc/xray/config.json | jq --argjson users "$users" '
+        if (.inbounds | any(.tag == "api")) then . else
+            .inbounds += [{"tag":"api","port":10085,"listen":"127.0.0.1","protocol":"dokodemo-door","settings":{"address":"127.0.0.1"}}]
+        end |
         (.inbounds[] | select(.tag == "VMess-TCP")   .settings.clients) = $users.vmess |
         (.inbounds[] | select(.tag == "VMess-WS")    .settings.clients) = $users.vmess |
         (.inbounds[] | select(.tag == "VMess-TLS")   .settings.clients) = $users.vmess |
@@ -1235,7 +1238,12 @@ sync_xray() {
 sync_v2ray() {
     local users=$(cat /etc/v2ray/users.json 2>/dev/null || echo '{"vless":[]}')
     local tmp=$(mktemp)
-    cat /etc/v2ray/config.json | jq --argjson users "$(echo "$users" | jq '.vless')" '.inbounds[0].settings.clients = $users' > "$tmp" 2>/dev/null && mv "$tmp" /etc/v2ray/config.json && systemctl restart v2ray 2>/dev/null || true
+    cat /etc/v2ray/config.json | jq --argjson users "$(echo "$users" | jq '.vless')" '
+        if (.inbounds | any(.tag == "api")) then . else
+            .inbounds += [{"tag":"api","port":10086,"listen":"127.0.0.1","protocol":"dokodemo-door","settings":{"address":"127.0.0.1"}}]
+        end |
+        .inbounds[0].settings.clients = $users
+    ' > "$tmp" 2>/dev/null && mv "$tmp" /etc/v2ray/config.json && systemctl restart v2ray 2>/dev/null || true
 }
 
 show_vmess_config() {
