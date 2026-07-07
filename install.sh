@@ -1028,6 +1028,67 @@ prompt_sub() {
     echo -e "${RESET}"
 }
 
+# ── Tableau de suppression interactif ──
+# Utilisation: mapfile -t selected < <(show_del_panel "TITRE" "user1|date1" "user2|date2" ...)
+# Les noms choisis sont ecrits sur stdout (un par ligne).
+show_del_panel() {
+  local title="$1"; shift
+  local -a users=("$@")
+  local -a unames=()
+  local i=0 expired=0 active=0 today
+  today=$(date +%Y-%m-%d)
+  clear
+  echo -e "${BG}┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄${RESET}"
+  echo -e "${BG}        >>> ${title} <<<${RESET}"
+  echo -e "${BG}┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄${RESET}"
+  echo ""
+  printf "  ${WHITE}%-3s %-16s %-14s %s${RESET}\n" "NO" "USERNAME" "EXPIRED" "STATUS"
+  echo -e "  ${DIM}──   ────────        ───────        ──────${RESET}"
+  for entry in "${users[@]}"; do
+    local uname="${entry%%|*}"
+    local exp="${entry#*|}"
+    unames+=("$uname")
+    i=$((i+1))
+    if [[ "$exp" < "$today" ]]; then
+      printf "  ${CYAN}%02d${RESET}  ${WHITE}%-16s${RESET} ${MAG}%-14s${RESET} ${RED}%-6s${RESET}\n" "$i" "$uname" "$exp" "EXPIRED"
+      expired=$((expired+1))
+    else
+      printf "  ${CYAN}%02d${RESET}  ${WHITE}%-16s${RESET} ${MAG}%-14s${RESET} ${GREEN}%-6s${RESET}\n" "$i" "$uname" "$exp" "ACTIVE"
+      active=$((active+1))
+    fi
+  done
+  echo -e "${BG}┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄${RESET}"
+  printf "\n  ${LAV}Total :${RESET} ${WHITE}%d${RESET} utilisateurs  (${RED}%d expire${RESET} · ${GREEN}%d actif${RESET})\n\n" "$i" "$expired" "$active"
+  echo -e "  ${YELLOW}Entrer le(s) numero(s) a supprimer${RESET}"
+  echo -e "  ${DIM}(ex: 1 ou 1,3,5 ou 1-4)${RESET}\n"
+  echo -e "  ${RED}[A]${RESET} Supprimer TOUT     ${GREEN}[0]${RESET} Annuler"
+  echo -e "${BG}┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄${RESET}"
+  echo -ne " ${CYAN}Select »»${RESET} "
+  IFS= read -r input
+  [[ -z "$input" ]] && return
+  input="${input,,}"
+  if [[ "$input" == "a" ]]; then
+    for u in "${unames[@]}"; do echo "$u"; done
+    return
+  fi
+  [[ "$input" == "0" ]] && return
+  local -a selected=()
+  IFS=',' read -ra parts <<< "$input"
+  for part in "${parts[@]}"; do
+    part="${part// /}"
+    [[ -z "$part" ]] && continue
+    if [[ "$part" =~ ^([0-9]+)-([0-9]+)$ ]]; then
+      local start="${BASH_REMATCH[1]}" end="${BASH_REMATCH[2]}"
+      for ((n=start; n<=end; n++)); do
+        (( n >= 1 && n <= i )) && selected+=("${unames[n-1]}")
+      done
+    elif [[ "$part" =~ ^[0-9]+$ ]]; then
+      (( part >= 1 && part <= i )) && selected+=("${unames[part-1]}")
+    fi
+  done
+  printf "%s\n" "${selected[@]}"
+}
+
 # ================================================
 # SOUS-MENU SSH VIP
 # ================================================
@@ -1082,8 +1143,8 @@ menu_ssh_vip() {
                 echo -e "${BG}╚═══════════════════════════════════════════════════════════════════════╝${RESET}"
                 echo "$(date '+%Y-%m-%d %H:%M:%S') | CREATION | $u | Exp: $E" >> /var/log/kighmu-user.log 2>/dev/null || true
             else echo -e "${RED}  ✗ Échec création (user existe déjà ?)${RESET}"; fi; pause;;
-            2) clear; echo -e "${CYAN}━━ Suppression ━━${RESET}"; read -rp "  Username: " u; userdel -r "$u" 2>/dev/null && echo -e "${GREEN}  ✓ Supprimé${RESET}" || echo -e "${RED}  ✗ Introuvable${RESET}"; pause;;
-            3) clear; echo -e "${CYAN}━━ Liste comptes SSH ━━${RESET}"; awk -F: '$7~/bash|sh/ && $3>=1000 {printf "  %-15s exp: ", $1; system("chage -l "$1" 2>/dev/null | grep \"Account expires\" | cut -d: -f2")}' /etc/passwd; pause;;
+             2) local -a ssh_users=(); while IFS= read -r u; do local exp=$(chage -l "$u" 2>/dev/null | grep "Account expires" | awk -F: '{print $2}' | xargs); [[ "$exp" == "never" || -z "$exp" ]] && exp="2099-12-31"; ssh_users+=("$u|$exp"); done < <(awk -F: '$7~/bash|sh/ && $3>=1000{print $1}' /etc/passwd 2>/dev/null); if (( ${#ssh_users[@]} == 0 )); then clear; echo -e "  ${YELLOW}Aucun utilisateur SSH${RESET}"; pause; else mapfile -t selected < <(show_del_panel "LISTE DES UTILISATEURS" "${ssh_users[@]}"); if (( ${#selected[@]} > 0 )); then local cnt=0; for del_user in "${selected[@]}"; do userdel -r "$del_user" 2>/dev/null && cnt=$((cnt+1)); done; clear; echo -e "${GREEN}  ✓ $cnt compte(s) SSH supprime(s)${RESET}"; else clear; echo -e "  ${YELLOW}Aucune suppression${RESET}"; fi; pause; fi;;
+             3) clear; echo -e "${CYAN}━━ Liste comptes SSH ━━${RESET}"; awk -F: '$7~/bash|sh/ && $3>=1000 {printf "  %-15s exp: ", $1; system("chage -l "$1" 2>/dev/null | grep \"Account expires\" | cut -d: -f2")}' /etc/passwd; pause;;
             4) clear; echo -e "${CYAN}━━ Renew compte ━━${RESET}"; read -rp "  Username: " u; read -rp "  Jours suppl.: " e; chage -E "$(date -d "+${e}days" +%Y-%m-%d)" "$u" 2>/dev/null && echo -e "${GREEN}  ✓ Prolongé${RESET}" || echo -e "${RED}  ✗ Échec${RESET}"; pause;;
             5) clear; echo -e "${CYAN}━━ Trial 1 jour ━━${RESET}"; read -rp "  Username: " u; read -rp "  Password: " p; useradd -e "$(date -d "+1day" +%Y-%m-%d)" -s /bin/bash "$u" 2>/dev/null && echo "$u:$p" | chpasswd && echo -e "${GREEN}  ✓ Trial $u créé (24h)${RESET}"; pause;;
             6) clear; echo -e "${CYAN}━━ Check expiry ━━${RESET}"; read -rp "  Username: " u; chage -l "$u" 2>/dev/null | grep -E 'Account expires|Last change' || echo -e "${RED}  ✗ Compte introuvable${RESET}"; pause;;
@@ -1174,8 +1235,8 @@ menu_vmess() {
         prompt_sub "VMESS"
         case $SUB in
             1) clear; echo -e "${CYAN}━━ Création VMESS ━━${RESET}"; read -rp "  Username: " u; read -rp "  Expire (jours): " e; read -rp "  Quota (GB, 0=illimité): " q; local id=$(gen_uuid); local exp=$(date -d "+${e}days" +%Y-%m-%d); if jq ".vmess += [{\"id\":\"$id\",\"email\":\"$u@${DOMAIN:-$IP}\",\"level\":0,\"expire\":\"$exp\",\"quota\":${q:-0}}]" /etc/xray/users.json > /tmp/xu.json 2>/dev/null && mv /tmp/xu.json /etc/xray/users.json && sync_xray; then clear; show_vmess_config "$u" "$id" "$exp" "${q:-0}"; else echo -e "${RED}  ✗ Échec${RESET}"; fi; pause;;
-            2) clear; echo -e "${CYAN}━━ Suppression ━━${RESET}"; read -rp "  Username: " u; jq "del(.vmess[] | select(.email | startswith(\"$u@\")))" /etc/xray/users.json > /tmp/xu.json && mv /tmp/xu.json /etc/xray/users.json && sync_xray && echo -e "${GREEN}  ✓ Supprimé${RESET}"; pause;;
-            3) clear; echo -e "${CYAN}━━ Liste VMESS ━━${RESET}"; jq -r '.vmess[] | "  \(.email) expire: \(.expire) quota: \(.quota // 0)GB"' /etc/xray/users.json 2>/dev/null || echo "  Aucun"; pause;;
+             2) local -a xr_users=(); while IFS='|' read -r uname exp; do xr_users+=("$uname|$exp"); done < <(jq -r '.vmess[] | select(.email) | "\(.email | split("@")[0])|\(.expire)"' /etc/xray/users.json 2>/dev/null); if (( ${#xr_users[@]} == 0 )); then clear; echo -e "  ${YELLOW}Aucun utilisateur VMESS${RESET}"; pause; else mapfile -t selected < <(show_del_panel "LISTE DES UTILISATEURS" "${xr_users[@]}"); if (( ${#selected[@]} > 0 )); then local cnt=0; for del_user in "${selected[@]}"; do jq "del(.vmess[] | select(.email | startswith(\"${del_user}@\")))" /etc/xray/users.json > /tmp/xu.json && mv /tmp/xu.json /etc/xray/users.json && cnt=$((cnt+1)); done; sync_xray; clear; echo -e "${GREEN}  ✓ $cnt compte(s) VMESS supprime(s)${RESET}"; else clear; echo -e "  ${YELLOW}Aucune suppression${RESET}"; fi; pause; fi;;
+             3) clear; echo -e "${CYAN}━━ Liste VMESS ━━${RESET}"; jq -r '.vmess[] | "  \(.email) expire: \(.expire) quota: \(.quota // 0)GB"' /etc/xray/users.json 2>/dev/null || echo "  Aucun"; pause;;
             4) clear; echo -e "${CYAN}━━ Renew ━━${RESET}"; read -rp "  Username: " u; read -rp "  Jours suppl.: " e; jq "(.vmess[] | select(.email | startswith(\"$u@\")) | .expire) = \"$(date -d "+${e}days" +%Y-%m-%d)\"" /etc/xray/users.json > /tmp/xu.json && mv /tmp/xu.json /etc/xray/users.json && sync_xray && echo -e "${GREEN}  ✓ Prolongé${RESET}"; pause;;
             5) clear; echo -e "${CYAN}━━ Trial 1j ━━${RESET}"; read -rp "  Username: " u; local id=$(gen_uuid); jq ".vmess += [{\"id\":\"$id\",\"email\":\"$u@${DOMAIN:-$IP}\",\"level\":0,\"expire\":\"$(date -d "+1day" +%Y-%m-%d)\",\"quota\":1}]" /etc/xray/users.json > /tmp/xu.json && mv /tmp/xu.json /etc/xray/users.json && sync_xray && echo -e "${GREEN}  ✅ Trial $u créé (24h, 1GB)${RESET}"; pause;;
             6) clear; echo -e "${CYAN}━━ Check expiry ━━${RESET}"; read -rp "  Username: " u; jq -r '.vmess[] | select(.email | startswith("'"$u"'@")) | "Expire: \(.expire) Quota: \(.quota // 0)GB"' /etc/xray/users.json 2>/dev/null || echo "  Introuvable"; pause;;
@@ -1199,8 +1260,9 @@ menu_vless() {
         prompt_sub "VLESS"
         case $SUB in
             1) clear; echo -e "${CYAN}━━ Création VLESS ━━${RESET}"; read -rp "  Username: " u; read -rp "  Expire (jours): " e; read -rp "  Quota (GB, 0=illimité): " q; local id=$(gen_uuid); local exp=$(date -d "+${e}days" +%Y-%m-%d); if jq ".vless += [{\"id\":\"$id\",\"email\":\"$u@${DOMAIN:-$IP}\",\"level\":0,\"expire\":\"$exp\",\"quota\":${q:-0}}]" /etc/xray/users.json > /tmp/xu.json && mv /tmp/xu.json /etc/xray/users.json && sync_xray; then clear; show_vless_config "$u" "$id" "$exp" "${q:-0}"; else echo -e "${RED}  ✗ Échec${RESET}"; fi; pause;;
-            2) clear; echo -e "${CYAN}━━ Suppression ━━${RESET}"; read -rp "  Username: " u; jq "del(.vless[] | select(.email | startswith(\"$u@\")))" /etc/xray/users.json > /tmp/xu.json && mv /tmp/xu.json /etc/xray/users.json && sync_xray && echo -e "${GREEN}  ✓ Supprimé${RESET}"; pause;;
-            3) clear; echo -e "${CYAN}━━ Liste VLESS ━━${RESET}"; jq -r '.vless[] | "  \(.email) expire: \(.expire) quota: \(.quota // 0)GB"' /etc/xray/users.json 2>/dev/null || echo "  Aucun"; pause;;
+             2) local -a xr_users=(); while IFS='|' read -r uname exp; do xr_users+=("$uname|$exp"); done < <(jq -r '.vless[] | select(.email) | "\(.email | split("@")[0])|\(.expire)"' /etc/xray/users.json 2>/dev/null); if (( ${#xr_users[@]} == 0 )); then clear; echo -e "  ${YELLOW}Aucun utilisateur VLESS${RESET}"; pause; else mapfile -t selected < <(show_del_panel "LISTE DES UTILISATEURS" "${xr_users[@]}"); if (( ${#selected[@]} > 0 )); then local cnt=0; for del_user in "${selected[@]}"; do jq "del(.vless[] | select(.email | startswith(\"${del_user}@\")))" /etc/xray/users.json > /tmp/xu.json && mv /tmp/xu.json /etc/xray/users.json && cnt=$((cnt+1)); done; sync_xray; clear; echo -e "${GREEN}  ✓ $cnt compte(s) VLESS supprime(s)${RESET}"; else clear; echo -e "  ${YELLOW}Aucune suppression${RESET}"; fi; pause; fi;;
+             3) clear; echo -e "${CYAN}━━ Liste VLESS ━━${RESET}"; jq -r '.vless[] | "  \(.email) expire: \(.expire) quota: \(.quota // 0)GB"' /etc/xray/users.json 2>/dev/null || echo "  Aucun"; pause;;
+
             4) clear; echo -e "${CYAN}━━ Renew ━━${RESET}"; read -rp "  Username: " u; read -rp "  Jours: " e; jq "(.vless[] | select(.email | startswith(\"$u@\")) | .expire) = \"$(date -d "+${e}days" +%Y-%m-%d)\"" /etc/xray/users.json > /tmp/xu.json && mv /tmp/xu.json /etc/xray/users.json && sync_xray && echo -e "${GREEN}  ✓ Prolongé${RESET}"; pause;;
             5) clear; echo -e "${CYAN}━━ Trial 1j ━━${RESET}"; read -rp "  Username: " u; local id=$(gen_uuid); jq ".vless += [{\"id\":\"$id\",\"email\":\"$u@${DOMAIN:-$IP}\",\"level\":0,\"expire\":\"$(date -d "+1day" +%Y-%m-%d)\",\"quota\":1}]" /etc/xray/users.json > /tmp/xu.json && mv /tmp/xu.json /etc/xray/users.json && sync_xray && echo -e "${GREEN}  ✅ Trial $u créé (24h, 1GB)${RESET}"; pause;;
             6) clear; echo -e "${CYAN}━━ Check ━━${RESET}"; read -rp "  Username: " u; jq -r '.vless[] | select(.email | startswith("'"$u"'@")) | "Expire: \(.expire) Quota: \(.quota // 0)GB"' /etc/xray/users.json 2>/dev/null || echo "  Introuvable"; pause;;
@@ -1224,8 +1286,8 @@ menu_trojan() {
         prompt_sub "TROJAN"
         case $SUB in
             1) clear; echo -e "${CYAN}━━ Création Trojan ━━${RESET}"; read -rp "  Username: " u; read -rp "  Password: " p; read -rp "  Expire (jours): " e; read -rp "  Quota (GB, 0=illimité): " q; local exp=$(date -d "+${e}days" +%Y-%m-%d); if jq ".trojan += [{\"password\":\"$p\",\"email\":\"$u@${DOMAIN:-$IP}\",\"level\":0,\"expire\":\"$exp\",\"quota\":${q:-0}}]" /etc/xray/users.json > /tmp/xu.json && mv /tmp/xu.json /etc/xray/users.json && sync_xray; then clear; show_trojan_config "$u" "$p" "$exp" "${q:-0}"; else echo -e "${RED}  ✗ Échec${RESET}"; fi; pause;;
-            2) clear; echo -e "${CYAN}━━ Suppression ━━${RESET}"; read -rp "  Username: " u; jq "del(.trojan[] | select(.email | startswith(\"$u@\")))" /etc/xray/users.json > /tmp/xu.json && mv /tmp/xu.json /etc/xray/users.json && sync_xray && echo -e "${GREEN}  ✓ Supprimé${RESET}"; pause;;
-            3) clear; echo -e "${CYAN}━━ Liste ━━${RESET}"; jq -r '.trojan[] | "  \(.email) expire: \(.expire) quota: \(.quota // 0)GB"' /etc/xray/users.json 2>/dev/null || echo "  Aucun"; pause;;
+             2) local -a xr_users=(); while IFS='|' read -r uname exp; do xr_users+=("$uname|$exp"); done < <(jq -r '.trojan[] | select(.email) | "\(.email | split("@")[0])|\(.expire)"' /etc/xray/users.json 2>/dev/null); if (( ${#xr_users[@]} == 0 )); then clear; echo -e "  ${YELLOW}Aucun utilisateur TROJAN${RESET}"; pause; else mapfile -t selected < <(show_del_panel "LISTE DES UTILISATEURS" "${xr_users[@]}"); if (( ${#selected[@]} > 0 )); then local cnt=0; for del_user in "${selected[@]}"; do jq "del(.trojan[] | select(.email | startswith(\"${del_user}@\")))" /etc/xray/users.json > /tmp/xu.json && mv /tmp/xu.json /etc/xray/users.json && cnt=$((cnt+1)); done; sync_xray; clear; echo -e "${GREEN}  ✓ $cnt compte(s) TROJAN supprime(s)${RESET}"; else clear; echo -e "  ${YELLOW}Aucune suppression${RESET}"; fi; pause; fi;;
+             3) clear; echo -e "${CYAN}━━ Liste ━━${RESET}"; jq -r '.trojan[] | "  \(.email) expire: \(.expire) quota: \(.quota // 0)GB"' /etc/xray/users.json 2>/dev/null || echo "  Aucun"; pause;;
             4) clear; echo -e "${CYAN}━━ Renew ━━${RESET}"; read -rp "  Username: " u; read -rp "  Jours: " e; jq "(.trojan[] | select(.email | startswith(\"$u@\")) | .expire) = \"$(date -d "+${e}days" +%Y-%m-%d)\"" /etc/xray/users.json > /tmp/xu.json && mv /tmp/xu.json /etc/xray/users.json && sync_xray && echo -e "${GREEN}  ✓ Prolongé${RESET}"; pause;;
             5) clear; echo -e "${CYAN}━━ Trial 1j ━━${RESET}"; read -rp "  Username: " u; read -rp "  Password: " p; jq ".trojan += [{\"password\":\"$p\",\"email\":\"$u@${DOMAIN:-$IP}\",\"level\":0,\"expire\":\"$(date -d "+1day" +%Y-%m-%d)\",\"quota\":1}]" /etc/xray/users.json > /tmp/xu.json && mv /tmp/xu.json /etc/xray/users.json && sync_xray && echo -e "${GREEN}  ✅ Trial $u créé (24h, 1GB)${RESET}"; pause;;
             6) clear; echo -e "${CYAN}━━ Check ━━${RESET}"; read -rp "  Username: " u; jq -r '.trojan[] | select(.email | startswith("'"$u"'@")) | "Expire: \(.expire) Quota: \(.quota // 0)GB"' /etc/xray/users.json 2>/dev/null || echo "  Introuvable"; pause;;
@@ -1249,8 +1311,8 @@ menu_shadow() {
         prompt_sub "SHADOWSOCKS"
         case $SUB in
             1) clear; echo -e "${CYAN}━━ Création SS ━━${RESET}"; read -rp "  Username: " u; read -rp "  Password: " p; read -rp "  Expire (jours): " e; read -rp "  Quota (GB, 0=illimité): " q; local exp=$(date -d "+${e}days" +%Y-%m-%d); if jq ".shadow += [{\"password\":\"$p\",\"method\":\"aes-256-gcm\",\"email\":\"$u@${DOMAIN:-$IP}\",\"level\":0,\"expire\":\"$exp\",\"quota\":${q:-0}}]" /etc/xray/users.json > /tmp/xu.json && mv /tmp/xu.json /etc/xray/users.json && sync_xray; then clear; show_shadow_config "$u" "$p" "$exp" "${q:-0}"; else echo -e "${RED}  ✗ Échec${RESET}"; fi; pause;;
-            2) clear; echo -e "${CYAN}━━ Suppression ━━${RESET}"; read -rp "  Username: " u; jq "del(.shadow[] | select(.email | startswith(\"$u@\")))" /etc/xray/users.json > /tmp/xu.json && mv /tmp/xu.json /etc/xray/users.json && sync_xray && echo -e "${GREEN}  ✓ Supprimé${RESET}"; pause;;
-            3) clear; echo -e "${CYAN}━━ Liste ━━${RESET}"; jq -r '.shadow[] | "  \(.email) expire: \(.expire) quota: \(.quota // 0)GB"' /etc/xray/users.json 2>/dev/null || echo "  Aucun"; pause;;
+             2) local -a xr_users=(); while IFS='|' read -r uname exp; do xr_users+=("$uname|$exp"); done < <(jq -r '.shadow[] | select(.email) | "\(.email | split("@")[0])|\(.expire)"' /etc/xray/users.json 2>/dev/null); if (( ${#xr_users[@]} == 0 )); then clear; echo -e "  ${YELLOW}Aucun utilisateur SHADOWSOCKS${RESET}"; pause; else mapfile -t selected < <(show_del_panel "LISTE DES UTILISATEURS" "${xr_users[@]}"); if (( ${#selected[@]} > 0 )); then local cnt=0; for del_user in "${selected[@]}"; do jq "del(.shadow[] | select(.email | startswith(\"${del_user}@\")))" /etc/xray/users.json > /tmp/xu.json && mv /tmp/xu.json /etc/xray/users.json && cnt=$((cnt+1)); done; sync_xray; clear; echo -e "${GREEN}  ✓ $cnt compte(s) SHADOWSOCKS supprime(s)${RESET}"; else clear; echo -e "  ${YELLOW}Aucune suppression${RESET}"; fi; pause; fi;;
+             3) clear; echo -e "${CYAN}━━ Liste ━━${RESET}"; jq -r '.shadow[] | "  \(.email) expire: \(.expire) quota: \(.quota // 0)GB"' /etc/xray/users.json 2>/dev/null || echo "  Aucun"; pause;;
             4) clear; echo -e "${CYAN}━━ Renew ━━${RESET}"; read -rp "  Username: " u; read -rp "  Jours: " e; jq "(.shadow[] | select(.email | startswith(\"$u@\")) | .expire) = \"$(date -d "+${e}days" +%Y-%m-%d)\"" /etc/xray/users.json > /tmp/xu.json && mv /tmp/xu.json /etc/xray/users.json && sync_xray && echo -e "${GREEN}  ✓ Prolongé${RESET}"; pause;;
             5) clear; echo -e "${CYAN}━━ Trial ━━${RESET}"; read -rp "  Username: " u; read -rp "  Password: " p; jq ".shadow += [{\"password\":\"$p\",\"method\":\"aes-256-gcm\",\"email\":\"$u@${DOMAIN:-$IP}\",\"level\":0,\"expire\":\"$(date -d "+1day" +%Y-%m-%d)\",\"quota\":1}]" /etc/xray/users.json > /tmp/xu.json && mv /tmp/xu.json /etc/xray/users.json && sync_xray && echo -e "${GREEN}  ✅ Trial $u créé (24h, 1GB)${RESET}"; pause;;
             6) clear; echo -e "${CYAN}━━ Check ━━${RESET}"; read -rp "  Username: " u; jq -r '.shadow[] | select(.email | startswith("'"$u"'@")) | "Expire: \(.expire) Quota: \(.quota // 0)GB"' /etc/xray/users.json 2>/dev/null || echo "  Introuvable"; pause;;
@@ -1454,8 +1516,8 @@ menu_zivpn() {
         prompt_sub "ZIVPN"
         case $SUB in
             1) clear; echo -e "${CYAN}━━ Création ZIVPN ━━${RESET}"; read -rp "  Username: " u; read -rp "  Password: " p; read -rp "  Expire (jours): " e; local exp=$(date -d "+${e}days" +%Y-%m-%d); if echo "$u|$p|$exp" >> /etc/zivpn/users.list 2>/dev/null; then echo -e "${GREEN}  ✅ UTILISATEUR CREE${RESET}"; sync_zivpn; echo; echo -e "  🌐 Domaine : ${WHITE}${DOMAIN}${RESET}"; echo -e "  🔐 Password : ${WHITE}${p}${RESET}"; echo -e "  📅 Expire : ${WHITE}${exp}${RESET}"; else echo -e "${RED}  ✗ Échec${RESET}"; fi; pause;;
-            2) clear; echo -e "${CYAN}━━ Suppression ━━${RESET}"; read -rp "  Username: " u; sed -i "/^$u|/d" /etc/zivpn/users.list 2>/dev/null || true; echo -e "${GREEN}  ✓ Supprimé${RESET}"; sync_zivpn; pause;;
-            3) clear; echo -e "${CYAN}━━ Liste ━━${RESET}"; [[ -f /etc/zivpn/users.list ]] && cat /etc/zivpn/users.list | awk -F'|' '{print "  " $1 " → " $3}' || echo "  Aucun"; pause;;
+             2) local -a udp_users=(); while IFS='|' read -r uname _pw exp; do udp_users+=("$uname|$exp"); done < /etc/zivpn/users.list 2>/dev/null; if (( ${#udp_users[@]} == 0 )); then clear; echo -e "  ${YELLOW}Aucun utilisateur ZIVPN${RESET}"; pause; else mapfile -t selected < <(show_del_panel "LISTE DES UTILISATEURS" "${udp_users[@]}"); if (( ${#selected[@]} > 0 )); then local cnt=0; for del_user in "${selected[@]}"; do sed -i "/^${del_user}|/d" /etc/zivpn/users.list 2>/dev/null || true; cnt=$((cnt+1)); done; sync_zivpn; clear; echo -e "${GREEN}  ✓ $cnt compte(s) ZIVPN supprime(s)${RESET}"; else clear; echo -e "  ${YELLOW}Aucune suppression${RESET}"; fi; pause; fi;;
+             3) clear; echo -e "${CYAN}━━ Liste ━━${RESET}"; [[ -f /etc/zivpn/users.list ]] && cat /etc/zivpn/users.list | awk -F'|' '{print "  " $1 " → " $3}' || echo "  Aucun"; pause;;
             4) clear; echo -e "${CYAN}━━ Renew ━━${RESET}"; read -rp "  Username: " u; read -rp "  Jours: " e; sed -i "/^$u|/s|[^|]*$|$(date -d "+${e}days" +%Y-%m-%d)|" /etc/zivpn/users.list 2>/dev/null && echo -e "${GREEN}  ✓ Prolongé${RESET}"; sync_zivpn; pause;;
             5) clear; echo -e "${CYAN}━━ Trial ━━${RESET}"; read -rp "  Username: " u; read -rp "  Password: " p; echo "$u|$p|$(date -d "+1day" +%Y-%m-%d)" >> /etc/zivpn/users.list && echo -e "${GREEN}  ✓ Trial $u créé${RESET}"; sync_zivpn; pause;;
             6) clear; echo -e "${CYAN}━━ Check ━━${RESET}"; read -rp "  Username: " u; awk -F'|' -v u="$u" '$1==u{print "  Expire: " $3}' /etc/zivpn/users.list 2>/dev/null || echo "  Introuvable"; pause;;
@@ -1478,8 +1540,8 @@ menu_hysteria() {
         prompt_sub "HYSTERIA"
         case $SUB in
             1) clear; echo -e "${CYAN}━━ Création Hysteria ━━${RESET}"; read -rp "  Username: " u; read -rp "  Password: " p; read -rp "  Expire (jours): " e; local exp=$(date -d "+${e}days" +%Y-%m-%d); if echo "$u|$p|$exp" >> /etc/hysteria/users.txt 2>/dev/null; then echo -e "${GREEN}  ✅ UTILISATEUR CREE${RESET}"; sync_hysteria; echo; echo -e "  🌐 Domaine : ${WHITE}${DOMAIN}${RESET}"; echo -e "  🎭 Obfs : ${WHITE}hysteria${RESET}"; echo -e "  🔐 Password : ${WHITE}${p}${RESET}"; echo -e "  📅 Expire : ${WHITE}${exp}${RESET}"; echo -e "  🔌 Port : ${WHITE}20000-50000${RESET}"; else echo -e "${RED}  ✗ Échec${RESET}"; fi; pause;;
-            2) clear; echo -e "${CYAN}━━ Suppression ━━${RESET}"; read -rp "  Username: " u; sed -i "/^$u|/d" /etc/hysteria/users.txt 2>/dev/null || true; echo -e "${GREEN}  ✓ Supprimé${RESET}"; sync_hysteria; pause;;
-            3) clear; echo -e "${CYAN}━━ Liste ━━${RESET}"; [[ -f /etc/hysteria/users.txt ]] && cat /etc/hysteria/users.txt | awk -F'|' '{print "  " $1 " → " $3}' || echo "  Aucun"; pause;;
+             2) local -a udp_users=(); while IFS='|' read -r uname _pw exp; do udp_users+=("$uname|$exp"); done < /etc/hysteria/users.txt 2>/dev/null; if (( ${#udp_users[@]} == 0 )); then clear; echo -e "  ${YELLOW}Aucun utilisateur HYSTERIA${RESET}"; pause; else mapfile -t selected < <(show_del_panel "LISTE DES UTILISATEURS" "${udp_users[@]}"); if (( ${#selected[@]} > 0 )); then local cnt=0; for del_user in "${selected[@]}"; do sed -i "/^${del_user}|/d" /etc/hysteria/users.txt 2>/dev/null || true; cnt=$((cnt+1)); done; sync_hysteria; clear; echo -e "${GREEN}  ✓ $cnt compte(s) HYSTERIA supprime(s)${RESET}"; else clear; echo -e "  ${YELLOW}Aucune suppression${RESET}"; fi; pause; fi;;
+             3) clear; echo -e "${CYAN}━━ Liste ━━${RESET}"; [[ -f /etc/hysteria/users.txt ]] && cat /etc/hysteria/users.txt | awk -F'|' '{print "  " $1 " → " $3}' || echo "  Aucun"; pause;;
             4) clear; echo -e "${CYAN}━━ Renew ━━${RESET}"; read -rp "  Username: " u; read -rp "  Jours: " e; sed -i "/^$u|/s|[^|]*$|$(date -d "+${e}days" +%Y-%m-%d)|" /etc/hysteria/users.txt 2>/dev/null && echo -e "${GREEN}  ✓ Prolongé${RESET}"; sync_hysteria; pause;;
             5) clear; echo -e "${CYAN}━━ Trial ━━${RESET}"; read -rp "  Username: " u; read -rp "  Password: " p; echo "$u|$p|$(date -d "+1day" +%Y-%m-%d)" >> /etc/hysteria/users.txt && echo -e "${GREEN}  ✓ Trial $u créé${RESET}"; sync_hysteria; pause;;
             6) clear; echo -e "${CYAN}━━ Check ━━${RESET}"; read -rp "  Username: " u; awk -F'|' -v u="$u" '$1==u{print "  Expire: " $3}' /etc/hysteria/users.txt 2>/dev/null || echo "  Introuvable"; pause;;
@@ -1502,8 +1564,8 @@ menu_v2ray_dns() {
         prompt_sub "V2RAY DNS"
         case $SUB in
             1) clear; echo -e "${CYAN}━━ Création V2Ray DNS ━━${RESET}"; read -rp "  Username: " u; read -rp "  Expire (jours): " e; read -rp "  Quota (GB, 0=illimité): " q; local id=$(gen_uuid); local exp=$(date -d "+${e}days" +%Y-%m-%d); if jq ".vless += [{\"id\":\"$id\",\"email\":\"$u@${DOMAIN:-$IP}\",\"level\":0,\"expire\":\"$exp\",\"quota\":${q:-0}}]" /etc/v2ray/users.json 2>/dev/null > /tmp/v2u.json && mv /tmp/v2u.json /etc/v2ray/users.json && sync_v2ray; then clear; show_v2ray_config "$u" "$id" "$exp" "${q:-0}" "$e"; else echo -e "${RED}  ✗ Échec${RESET}"; fi; pause;;
-            2) clear; echo -e "${CYAN}━━ Suppression ━━${RESET}"; read -rp "  Username: " u; jq "del(.vless[] | select(.email | startswith(\"$u@\")))" /etc/v2ray/users.json > /tmp/v2u.json && mv /tmp/v2u.json /etc/v2ray/users.json && sync_v2ray && echo -e "${GREEN}  ✓ Supprimé${RESET}"; pause;;
-            3) clear; echo -e "${CYAN}━━ Liste V2Ray DNS ━━${RESET}"; jq -r '.vless[] | "  \(.email) expire: \(.expire) quota: \(.quota // 0)GB"' /etc/v2ray/users.json 2>/dev/null || echo "  Aucun"; pause;;
+             2) local -a v2_users=(); while IFS='|' read -r uname exp; do v2_users+=("$uname|$exp"); done < <(jq -r '.vless[] | select(.email) | "\(.email | split("@")[0])|\(.expire)"' /etc/v2ray/users.json 2>/dev/null); if (( ${#v2_users[@]} == 0 )); then clear; echo -e "  ${YELLOW}Aucun utilisateur V2RAY${RESET}"; pause; else mapfile -t selected < <(show_del_panel "LISTE DES UTILISATEURS" "${v2_users[@]}"); if (( ${#selected[@]} > 0 )); then local cnt=0; for del_user in "${selected[@]}"; do jq "del(.vless[] | select(.email | startswith(\"${del_user}@\")))" /etc/v2ray/users.json > /tmp/v2u.json && mv /tmp/v2u.json /etc/v2ray/users.json && cnt=$((cnt+1)); done; sync_v2ray; clear; echo -e "${GREEN}  ✓ $cnt compte(s) V2RAY supprime(s)${RESET}"; else clear; echo -e "  ${YELLOW}Aucune suppression${RESET}"; fi; pause; fi;;
+             3) clear; echo -e "${CYAN}━━ Liste V2Ray DNS ━━${RESET}"; jq -r '.vless[] | "  \(.email) expire: \(.expire) quota: \(.quota // 0)GB"' /etc/v2ray/users.json 2>/dev/null || echo "  Aucun"; pause;;
             4) clear; echo -e "${CYAN}━━ Renew ━━${RESET}"; read -rp "  Username: " u; read -rp "  Jours: " e; jq "(.vless[] | select(.email | startswith(\"$u@\")) | .expire) = \"$(date -d "+${e}days" +%Y-%m-%d)\"" /etc/v2ray/users.json > /tmp/v2u.json && mv /tmp/v2u.json /etc/v2ray/users.json && sync_v2ray && echo -e "${GREEN}  ✓ Prolongé${RESET}"; pause;;
             5) clear; echo -e "${CYAN}━━ Trial 1j ━━${RESET}"; read -rp "  Username: " u; local id=$(gen_uuid); jq ".vless += [{\"id\":\"$id\",\"email\":\"$u@${DOMAIN:-$IP}\",\"level\":0,\"expire\":\"$(date -d "+1day" +%Y-%m-%d)\",\"quota\":1}]" /etc/v2ray/users.json > /tmp/v2u.json && mv /tmp/v2u.json /etc/v2ray/users.json && sync_v2ray && echo -e "${GREEN}  ✅ Trial $u créé (24h, 1GB)${RESET}"; pause;;
             6) clear; echo -e "${CYAN}━━ Check ━━${RESET}"; read -rp "  Username: " u; jq -r '.vless[] | select(.email | startswith("'"$u"'@")) | "Expire: \(.expire) Quota: \(.quota // 0)GB"' /etc/v2ray/users.json 2>/dev/null || echo "  Introuvable"; pause;;
