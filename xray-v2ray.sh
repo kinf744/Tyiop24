@@ -347,10 +347,150 @@ delete_xray_user() {
     xray_build_config; echo "✅ Supprimé"; pause
 }
 
+# ================================================
+# XRAY - DIAGNOSTIC + RÉPARATION + WATCHDOG
+# ================================================
+xray_gen_service() {
+    cat > /etc/systemd/system/xray.service << 'XSVCEOF'
+[Unit]
+Description=Xray Service; After=network-online.target nss-lookup.target; Wants=network-online.target; StartLimitIntervalSec=0
+[Service]
+User=root; CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE; AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
+NoNewPrivileges=true; ExecStart=/usr/local/bin/xray -config /etc/xray/config.json; Restart=always; RestartSec=5s; LimitNOFILE=1048576
+[Install]
+WantedBy=multi-user.target
+XSVCEOF
+}
+xray_diagnostic() {
+    local errors=0 fixes=0
+    echo -e "${BOLD}${CYAN}  ━━━ DIAGNOSTIC XRAY ━━━${RESET}"
+    if [[ ! -x "$XRAY_BIN" ]]; then err "Binaire manquant"; ((errors++)); fi
+    if [[ -f "$XRAY_CONFIG" ]]; then
+        jq empty "$XRAY_CONFIG" 2>/dev/null && log "Config JSON valide" || { err "Config JSON invalide"; ((errors++)); }
+    else err "Config manquante"; ((errors++)); fi
+    if [[ -f "$XRAY_USERS" ]]; then
+        jq empty "$XRAY_USERS" 2>/dev/null && log "Users JSON valide" || { err "Users JSON invalide"; ((errors++)); }
+    else warn "Users.json manquant — création"; echo '{"vmess":[],"vless":[],"trojan":[],"shadow":[]}' > "$XRAY_USERS"; ((fixes++)); fi
+    for f in /etc/xray/xray.crt /etc/xray/xray.key /etc/xray/xray.pem; do
+        [[ -f "$f" ]] && log "  ${f} présent" || warn "  ${f} manquant"
+    done
+    if [[ -f /etc/xray/xray.crt ]] && openssl x509 -checkend 0 -noout -in /etc/xray/xray.crt 2>/dev/null; then
+        local exp; exp=$(openssl x509 -enddate -noout -in /etc/xray/xray.crt 2>/dev/null | cut -d= -f2)
+        log "  Certificat valide jusqu'à : ${exp}"
+    else warn "  Certificat expiré ou invalide"; fi
+    local status; status=$(systemctl is-active xray 2>/dev/null || echo "inactif")
+    local enabled; enabled=$(systemctl is-enabled xray 2>/dev/null || echo "désactivé")
+    log "Xray: ${status} | Démarrage auto: ${enabled}"
+    if [[ $errors -eq 0 ]]; then echo -e "${GREEN}  ✅ Aucun problème critique${RESET}"
+    else echo -e "${RED}  ❌ ${errors} problème(s), ${fixes} correction(s)${RESET}"; fi
+    return $errors
+}
+
+xray_repair_binary() {
+    info "Mise à jour du binaire Xray..."
+    rm -rf /tmp/xray_rep; mkdir -p /tmp/xray_rep; cd /tmp/xray_rep
+    curl -L -o xray.zip "https://github.com/XTLS/Xray-core/releases/latest/download/xray-linux-64.zip" 2>/dev/null
+    if [[ -f xray.zip ]]; then
+        unzip -o xray.zip >/dev/null 2>&1
+        if [[ -f xray ]]; then mv -f xray "$XRAY_BIN"; chmod +x "$XRAY_BIN"; setcap 'cap_net_bind_service=+ep' "$XRAY_BIN" 2>/dev/null || true
+            log "Binaire mis à jour : $("$XRAY_BIN" version 2>/dev/null | head -1)"
+        else err "Extraction échouée"; fi
+    else err "Téléchargement échoué"; fi
+    rm -rf /tmp/xray_rep
+}
+
+xray_repair_config() {
+    local domain; domain=$(cat "$XRAY_DOMAIN" 2>/dev/null || hostname -I | awk '{print $1}')
+    info "Régénération de la configuration Xray..."
+    [[ -f "$XRAY_CONFIG" ]] && cp "$XRAY_CONFIG" "${XRAY_CONFIG}.bak.$(date +%s)"
+    local vmess_clients='[]' vless_clients='[]' trojan_clients='[]' shadow_clients='[]'
+    if [[ -f "$XRAY_CONFIG" ]] && jq empty "$XRAY_CONFIG" 2>/dev/null; then
+        vmess_clients=$(jq '[.inbounds[] | select(.tag | test("VMess")) | .settings.clients[]] | unique' "$XRAY_CONFIG" 2>/dev/null || echo '[]')
+        vless_clients=$(jq '[.inbounds[] | select(.tag | test("VLESS")) | .settings.clients[]] | unique' "$XRAY_CONFIG" 2>/dev/null || echo '[]')
+        trojan_clients=$(jq '[.inbounds[] | select(.tag | test("Trojan")) | .settings.clients[]] | unique' "$XRAY_CONFIG" 2>/dev/null || echo '[]')
+        shadow_clients=$(jq '[.inbounds[] | select(.tag | test("Shadowsocks")) | .settings.clients[]] | unique' "$XRAY_CONFIG" 2>/dev/null || echo '[]')
+    fi
+    xray_gen_config "$domain"
+    local tmp; tmp=$(mktemp)
+    jq --argjson vmess "$vmess_clients" --argjson vless "$vless_clients" --argjson trojan "$trojan_clients" --argjson shadow "$shadow_clients" '
+        (.inbounds[] | select(.tag | test("VMess"))   | .settings.clients) = $vmess |
+        (.inbounds[] | select(.tag | test("VLESS"))   | .settings.clients) = $vless |
+        (.inbounds[] | select(.tag | test("Trojan"))  | .settings.clients) = $trojan |
+        (.inbounds[] | select(.tag | test("Shadowsocks")) | .settings.clients) = $shadow
+    ' "$XRAY_CONFIG" > "$tmp" 2>/dev/null && jq empty "$tmp" >/dev/null 2>&1 && mv "$tmp" "$XRAY_CONFIG"
+    chmod 644 "$XRAY_CONFIG"; log "Configuration regénérée"
+}
+
+xray_install_watchdog() {
+    echo -e "${BOLD}${CYAN}  ━━━ INSTALLATION WATCHDOG XRAY (4 COUCHES) ━━━${RESET}"
+    mkdir -p /etc/kighmu
+    cat > /etc/kighmu/xray-watchdog.sh << 'WDEOF'
+#!/bin/bash
+XRAY_BIN="/usr/local/bin/xray"; XRAY_CONFIG="/etc/xray/config.json"; WATCHDOG_LOG="/var/log/xray-watchdog.log"
+log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$WATCHDOG_LOG"; }
+systemctl is-active --quiet xray 2>/dev/null && exit 0
+log "[WATCHDOG] Xray INACTIF — réparation..."
+[[ ! -x "$XRAY_BIN" ]] && { log "Binaire manquant"; exit 1; }
+[[ -f "$XRAY_CONFIG" ]] && ! jq empty "$XRAY_CONFIG" 2>/dev/null && { cp "$XRAY_CONFIG" "${XRAY_CONFIG}.corrupted.$(date +%s)"; log "Config corrompue"; }
+for port in 10001 10002 10003 10004 10005 10006 10007 10008 10009 10010 10011 10012 10013 10014 10015 10016 10017 10085; do
+    local pid; pid=$(ss -tlnp | grep ":$port " | grep -v xray | grep -oP 'pid=\K[0-9]+' | head -1)
+    [[ -n "$pid" ]] && { kill "$pid" 2>/dev/null || true; log "Port $port libéré (PID $pid)"; }
+done
+systemctl start xray 2>/dev/null; sleep 3
+systemctl is-active --quiet xray 2>/dev/null && log "[WATCHDOG] Xray redémarré !" || log "[WATCHDOG] Échec démarrage"
+WDEOF
+    chmod +x /etc/kighmu/xray-watchdog.sh; log "Script watchdog créé"
+    crontab -l 2>/dev/null | grep -v "xray-watchdog" | crontab - 2>/dev/null || true
+    (crontab -l 2>/dev/null; echo "* * * * * /etc/kighmu/xray-watchdog.sh") | crontab - 2>/dev/null; log "Cron ajouté (toutes les minutes)"
+    cat > /etc/systemd/system/xray-watchdog.service << 'SVCEOF'
+[Unit]
+Description=Xray Watchdog Service; After=network.target
+[Service]
+Type=oneshot; ExecStart=/etc/kighmu/xray-watchdog.sh; User=root
+SVCEOF
+    cat > /etc/systemd/system/xray-watchdog.timer << 'TMREOF'
+[Unit]
+Description=Xray Watchdog Timer; Requires=xray-watchdog.service
+[Timer]
+OnBootSec=30; OnUnitActiveSec=120; Unit=xray-watchdog.service
+[Install]
+WantedBy=timers.target
+TMREOF
+    systemctl daemon-reload; systemctl enable --now xray-watchdog.timer 2>/dev/null || true; log "systemd timer activé"
+    if ! grep -q "xray-watchdog" /etc/rc.local 2>/dev/null; then
+        mkdir -p /etc; [[ ! -f /etc/rc.local ]] && echo '#!/bin/bash\nexit 0' > /etc/rc.local && chmod +x /etc/rc.local
+        sed -i '/^exit 0/i /etc/kighmu/xray-watchdog.sh' /etc/rc.local 2>/dev/null || true; log "rc.local mis à jour"
+    fi
+    echo -e "${GREEN}  ✅ Watchdog 4 couches installé :${RESET}"
+    echo "   Couche 1: systemd Restart=always | Couche 2: Cron (60s)"
+    echo "   Couche 3: systemd timer (2min)  | Couche 4: rc.local (boot)"
+}
+
 fix_xray() {
-    systemctl reset-failed xray 2>/dev/null || true
-    systemctl restart xray nginx haproxy 2>/dev/null || true
-    log "Xray redémarré"; pause
+    xray_diagnostic; local rc=$?
+    if [[ $rc -gt 0 ]]; then
+        echo -e "\n${BOLD}${YELLOW}  🛠️  RÉPARATION AUTOMATIQUE${RESET}"
+        [[ ! -x "$XRAY_BIN" ]] && xray_repair_binary
+        [[ ! -f "$XRAY_CONFIG" ]] || ! jq empty "$XRAY_CONFIG" 2>/dev/null && xray_repair_config
+        [[ ! -f /etc/systemd/system/xray.service ]] && xray_gen_service
+        mkdir -p "$XRAY_LOG"; touch "$XRAY_LOG/access.log" "$XRAY_LOG/error.log"
+        systemctl daemon-reload; systemctl enable xray 2>/dev/null || true; systemctl start xray 2>/dev/null; sleep 3
+        if ! systemctl is-active --quiet xray 2>/dev/null; then
+            local test_result; test_result=$("$XRAY_BIN" -test -config "$XRAY_CONFIG" 2>&1)
+            if echo "$test_result" | grep -q "Configuration OK"; then
+                systemctl start xray 2>/dev/null; sleep 3
+            else err "Configuration invalide — régénération..."; xray_repair_config
+                systemctl start xray 2>/dev/null; sleep 3
+            fi
+        fi
+    fi
+    xray_install_watchdog
+    sleep 2
+    if systemctl is-active --quiet xray 2>/dev/null; then
+        log "Xray actif : $("$XRAY_BIN" version 2>/dev/null | head -1 | head -c 60)"
+    else err "Xray toujours inactif — vérifiez: journalctl -u xray -n 50 --no-pager"; fi
+    echo -e "${GREEN}  ✅ XRAY RÉPARÉ — WATCHDOG ACTIF${RESET}"
+    pause
 }
 
 uninstall_xray() {
@@ -505,7 +645,7 @@ main_menu() {
         echo
         echo "${WHITE}1. Xray (VMess/VLESS/Trojan/Shadowsocks)${RESET}"
         echo "   ${GREEN}[1a]${RESET} Installer    ${GREEN}[1b]${RESET} Ajouter user  ${GREEN}[1c]${RESET} Supprimer user"
-        echo "   ${GREEN}[1d]${RESET} Fix          ${GREEN}[1e]${RESET} Désinstaller"
+        echo "   ${GREEN}[1d]${RESET} Fix/Réparer  ${GREEN}[1e]${RESET} Désinstaller  ${GREEN}[1f]${RESET} Watchdog"
         echo
         echo "${WHITE}2. V2Ray (VLESS TCP)${RESET}"
         echo "   ${GREEN}[2a]${RESET} Installer    ${GREEN}[2b]${RESET} Ajouter user  ${GREEN}[2c]${RESET} Supprimer user"
@@ -515,9 +655,9 @@ main_menu() {
         echo
         echo -n "Choix: "
         read -r C
-        case $C in
+         case $C in
             1a) install_xray ;; 1b) add_xray_user ;; 1c) delete_xray_user ;;
-            1d) fix_xray ;; 1e) uninstall_xray ;;
+            1d) fix_xray ;; 1e) uninstall_xray ;; 1f) xray_install_watchdog; pause ;;
             2a) install_v2ray ;; 2b) add_v2ray_user ;; 2c) delete_v2ray_user ;;
             2d) fix_v2ray ;; 2e) uninstall_v2ray ;;
             0) exit 0 ;;
