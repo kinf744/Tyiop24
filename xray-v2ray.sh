@@ -58,27 +58,27 @@ XRAY_LOG="/var/log/xray"
 xray_installed() { [[ -x "$XRAY_BIN" ]] && systemctl list-unit-files | grep -q "^xray.service"; }
 
 xray_gen_config() {
-    local domain="$1"
-    cat > "$XRAY_CONFIG" << 'CONFEOF'
+    local domain="$1"; domain="${domain:-$(hostname -I | awk '{print $1}')}"
+    cat > "$XRAY_CONFIG" << CONFEOF
 {
   "log": { "loglevel": "warning", "access": "/var/log/xray/access.log", "error": "/var/log/xray/error.log" },
   "inbounds": [
     {"tag":"VMess-TCP","port":10001,"listen":"127.0.0.1","protocol":"vmess","settings":{"clients":[]},"streamSettings":{"network":"tcp","security":"none"}},
-    {"tag":"VMess-WS","port":10002,"listen":"127.0.0.1","protocol":"vmess","settings":{"clients":[]},"streamSettings":{"network":"ws","security":"none","wsSettings":{"path":"/vmess-ws","headers":{"Host":""}}}},
+    {"tag":"VMess-WS","port":10002,"listen":"127.0.0.1","protocol":"vmess","settings":{"clients":[]},"streamSettings":{"network":"ws","security":"none","wsSettings":{"path":"/vmess-ws"}}},
     {"tag":"VMess-TLS","port":10003,"listen":"127.0.0.1","protocol":"vmess","settings":{"clients":[]},"streamSettings":{"network":"tcp","security":"tls","tlsSettings":{"certificates":[{"certificateFile":"/etc/xray/xray.crt","keyFile":"/etc/xray/xray.key"}]}}},
-    {"tag":"VMess-WSS","port":10004,"listen":"127.0.0.1","protocol":"vmess","settings":{"clients":[]},"streamSettings":{"network":"ws","security":"tls","tlsSettings":{"certificates":[{"certificateFile":"/etc/xray/xray.crt","keyFile":"/etc/xray/xray.key"}]},"wsSettings":{"path":"/vmess-wss","headers":{"Host":""}}}},
+    {"tag":"VMess-WSS","port":10004,"listen":"127.0.0.1","protocol":"vmess","settings":{"clients":[]},"streamSettings":{"network":"ws","security":"tls","tlsSettings":{"certificates":[{"certificateFile":"/etc/xray/xray.crt","keyFile":"/etc/xray/xray.key"}]},"wsSettings":{"path":"/vmess-wss"}}},
     {"tag":"VLESS-TCP","port":10005,"listen":"127.0.0.1","protocol":"vless","settings":{"clients":[],"decryption":"none"},"streamSettings":{"network":"tcp","security":"none"}},
-    {"tag":"VLESS-WS","port":10006,"listen":"127.0.0.1","protocol":"vless","settings":{"clients":[],"decryption":"none"},"streamSettings":{"network":"ws","security":"none","wsSettings":{"path":"/vless-ws","headers":{"Host":""}}}},
+    {"tag":"VLESS-WS","port":10006,"listen":"127.0.0.1","protocol":"vless","settings":{"clients":[],"decryption":"none"},"streamSettings":{"network":"ws","security":"none","wsSettings":{"path":"/vless-ws"}}},
     {"tag":"VLESS-TLS","port":10007,"listen":"127.0.0.1","protocol":"vless","settings":{"clients":[],"decryption":"none"},"streamSettings":{"network":"tcp","security":"tls","tlsSettings":{"certificates":[{"certificateFile":"/etc/xray/xray.crt","keyFile":"/etc/xray/xray.key"}]}}},
-    {"tag":"VLESS-WSS","port":10008,"listen":"127.0.0.1","protocol":"vless","settings":{"clients":[],"decryption":"none"},"streamSettings":{"network":"ws","security":"tls","tlsSettings":{"certificates":[{"certificateFile":"/etc/xray/xray.crt","keyFile":"/etc/xray/xray.key"}]},"wsSettings":{"path":"/vless-wss","headers":{"Host":""}}}},
+    {"tag":"VLESS-WSS","port":10008,"listen":"127.0.0.1","protocol":"vless","settings":{"clients":[],"decryption":"none"},"streamSettings":{"network":"ws","security":"tls","tlsSettings":{"certificates":[{"certificateFile":"/etc/xray/xray.crt","keyFile":"/etc/xray/xray.key"}]},"wsSettings":{"path":"/vless-wss"}}},
     {"tag":"Trojan-TCP","port":10009,"listen":"127.0.0.1","protocol":"trojan","settings":{"clients":[]},"streamSettings":{"network":"tcp","security":"tls","tlsSettings":{"certificates":[{"certificateFile":"/etc/xray/xray.crt","keyFile":"/etc/xray/xray.key"}]}}},
-    {"tag":"Trojan-WS","port":10010,"listen":"127.0.0.1","protocol":"trojan","settings":{"clients":[]},"streamSettings":{"network":"ws","security":"tls","tlsSettings":{"certificates":[{"certificateFile":"/etc/xray/xray.crt","keyFile":"/etc/xray/xray.key"}]},"wsSettings":{"path":"/trojan-ws","headers":{"Host":""}}}},
+    {"tag":"Trojan-WS","port":10010,"listen":"127.0.0.1","protocol":"trojan","settings":{"clients":[]},"streamSettings":{"network":"ws","security":"tls","tlsSettings":{"certificates":[{"certificateFile":"/etc/xray/xray.crt","keyFile":"/etc/xray/xray.key"}]},"wsSettings":{"path":"/trojan-ws"}}},
     {"tag":"Shadowsocks","port":10011,"listen":"127.0.0.1","protocol":"shadowsocks","settings":{"clients":[],"network":"tcp,udp"},"streamSettings":{"network":"tcp","security":"none"}},
-    {"tag":"VLESS-XHTTP","port":10012,"listen":"127.0.0.1","protocol":"vless","settings":{"clients":[],"decryption":"none"},"streamSettings":{"network":"xhttp","security":"tls","tlsSettings":{"certificates":[{"certificateFile":"/etc/xray/xray.crt","keyFile":"/etc/xray/xray.key"}]},"xhttpSettings":{"path":"/vless-xhttp","headers":{"Host":""}}}},
+    {"tag":"VLESS-XHTTP","port":10012,"listen":"127.0.0.1","protocol":"vless","settings":{"clients":[],"decryption":"none"},"streamSettings":{"network":"xhttp","security":"tls","tlsSettings":{"certificates":[{"certificateFile":"/etc/xray/xray.crt","keyFile":"/etc/xray/xray.key"}]},"xhttpSettings":{"path":"/vless-xhttp"}}},
     {"tag":"VLESS-gRPC","port":10013,"listen":"127.0.0.1","protocol":"vless","settings":{"clients":[],"decryption":"none"},"streamSettings":{"network":"grpc","security":"tls","tlsSettings":{"certificates":[{"certificateFile":"/etc/xray/xray.crt","keyFile":"/etc/xray/xray.key"}]},"grpcSettings":{"serviceName":"vless-grpc"}}},
-    {"tag":"VMess-XHTTP","port":10014,"listen":"127.0.0.1","protocol":"vmess","settings":{"clients":[]},"streamSettings":{"network":"xhttp","security":"tls","tlsSettings":{"certificates":[{"certificateFile":"/etc/xray/xray.crt","keyFile":"/etc/xray/xray.key"}]},"xhttpSettings":{"path":"/vmess-xhttp","headers":{"Host":""}}}},
+    {"tag":"VMess-XHTTP","port":10014,"listen":"127.0.0.1","protocol":"vmess","settings":{"clients":[]},"streamSettings":{"network":"xhttp","security":"tls","tlsSettings":{"certificates":[{"certificateFile":"/etc/xray/xray.crt","keyFile":"/etc/xray/xray.key"}]},"xhttpSettings":{"path":"/vmess-xhttp"}}},
     {"tag":"VMess-gRPC","port":10015,"listen":"127.0.0.1","protocol":"vmess","settings":{"clients":[]},"streamSettings":{"network":"grpc","security":"tls","tlsSettings":{"certificates":[{"certificateFile":"/etc/xray/xray.crt","keyFile":"/etc/xray/xray.key"}]},"grpcSettings":{"serviceName":"vmess-grpc"}}},
-    {"tag":"Trojan-XHTTP","port":10016,"listen":"127.0.0.1","protocol":"trojan","settings":{"clients":[]},"streamSettings":{"network":"xhttp","security":"tls","tlsSettings":{"certificates":[{"certificateFile":"/etc/xray/xray.crt","keyFile":"/etc/xray/xray.key"}]},"xhttpSettings":{"path":"/trojan-xhttp","headers":{"Host":""}}}},
+    {"tag":"Trojan-XHTTP","port":10016,"listen":"127.0.0.1","protocol":"trojan","settings":{"clients":[]},"streamSettings":{"network":"xhttp","security":"tls","tlsSettings":{"certificates":[{"certificateFile":"/etc/xray/xray.crt","keyFile":"/etc/xray/xray.key"}]},"xhttpSettings":{"path":"/trojan-xhttp"}}},
     {"tag":"Trojan-gRPC","port":10017,"listen":"127.0.0.1","protocol":"trojan","settings":{"clients":[]},"streamSettings":{"network":"grpc","security":"tls","tlsSettings":{"certificates":[{"certificateFile":"/etc/xray/xray.crt","keyFile":"/etc/xray/xray.key"}]},"grpcSettings":{"serviceName":"trojan-grpc"}}}
   ],
   "outbounds": [{"tag":"direct","protocol":"freedom","settings":{}}],
@@ -203,14 +203,28 @@ HAPEOF
 }
 
 install_xray() {
-    xray_installed && { warn "Xray déjà installé"; pause; return; }
+    local IP DOMAIN; IP=$(hostname -I | awk '{print $1}')
+    if [[ -n "${SKIP_PAUSE:-}" ]]; then DOMAIN="$IP"; else read -rp "Domaine (pour TLS): " DOMAIN; DOMAIN=${DOMAIN:-$IP}; fi
+
+    if xray_installed; then
+        warn "Xray déjà installé — vérification des configs..."
+        DOMAIN=$(cat "$XRAY_DOMAIN" 2>/dev/null || echo "$IP")
+        if [[ ! -f /etc/haproxy/haproxy.cfg ]]; then
+            xray_gen_haproxy "$DOMAIN"
+            systemctl enable --now haproxy 2>/dev/null || true
+        fi
+        if [[ ! -f "$XRAY_CONFIG" ]] || ! jq empty "$XRAY_CONFIG" 2>/dev/null; then
+            xray_gen_config "$DOMAIN"
+            systemctl restart xray 2>/dev/null || true
+        fi
+        return
+    fi
+
     echo "${CYAN}━━━ Installation Xray + HAProxy + Nginx ━━━${RESET}"
     apt-get update -qq 2>/dev/null
     apt-get install -y -qq nginx haproxy curl socat xz-utils wget unzip jq ca-certificates lsof 2>/dev/null
     systemctl stop nginx haproxy xray 2>/dev/null || true
 
-    local IP DOMAIN; IP=$(hostname -I | awk '{print $1}')
-    if [[ -n "${SKIP_PAUSE:-}" ]]; then DOMAIN="$IP"; else read -rp "Domaine (pour TLS): " DOMAIN; DOMAIN=${DOMAIN:-$IP}; fi
     echo "$DOMAIN" > "$XRAY_DOMAIN"
 
     # Xray binary
@@ -554,8 +568,37 @@ V2RAY_CONFIG="/etc/v2ray/config.json"
 
 v2ray_installed() { [[ -x "$V2RAY_BIN" ]] && systemctl list-unit-files | grep -q "^v2ray.service"; }
 
+v2ray_gen_config() {
+    local uuid="$1"
+    cat > "$V2RAY_CONFIG" << V2CONFEOF
+{
+  "log": {"loglevel":"warning","access":"/var/log/v2ray/access.log","error":"/var/log/v2ray/error.log"},
+  "inbounds": [{
+    "port": 5401, "listen": "0.0.0.0", "protocol": "vless",
+    "settings": {"clients": [{"id":"$uuid","email":"default@v2ray","level":0}],"decryption":"none"},
+    "streamSettings": {"network":"tcp","security":"none"},
+    "tag": "VLESS-TCP"
+  }],
+  "outbounds": [{"protocol":"freedom","settings":{}}],
+  "stats": {},
+  "policy": {"levels":{"0":{"statsUserUplink":true,"statsUserDownlink":true}},"system":{"statsInboundUplink":true,"statsInboundDownlink":true}},
+  "api": {"tag":"api","services":["HandlerService","StatsService"]},
+  "routing": {"rules":[{"type":"field","inboundTag":"api","outboundTag":"api"}]}
+}
+V2CONFEOF
+    echo '{"vless":[]}' > /etc/v2ray/users.json
+}
+
 install_v2ray() {
-    v2ray_installed && { warn "V2Ray déjà installé"; pause; return; }
+    if v2ray_installed; then
+        warn "V2Ray déjà installé — vérification des configs..."
+        if [[ ! -f "$V2RAY_CONFIG" ]]; then
+            local UUID; UUID=$(gen_uuid)
+            v2ray_gen_config "$UUID"
+            systemctl restart v2ray 2>/dev/null || true
+        fi
+        return
+    fi
     echo "${CYAN}━━━ Installation V2Ray ━━━${RESET}"
     apt-get install -y -qq jq unzip 2>/dev/null
     local tmp; tmp=$(mktemp)
@@ -581,23 +624,7 @@ V2SYSEOF
 
     # Generate UUID + config
     local UUID; UUID=$(gen_uuid)
-    cat > "$V2RAY_CONFIG" << V2CONFEOF
-{
-  "log": {"loglevel":"warning","access":"/var/log/v2ray/access.log","error":"/var/log/v2ray/error.log"},
-  "inbounds": [{
-    "port": 5401, "listen": "0.0.0.0", "protocol": "vless",
-    "settings": {"clients": [{"id":"$UUID","email":"default@v2ray","level":0}],"decryption":"none"},
-    "streamSettings": {"network":"tcp","security":"none"},
-    "tag": "VLESS-TCP"
-  }],
-  "outbounds": [{"protocol":"freedom","settings":{}}],
-  "stats": {},
-  "policy": {"levels":{"0":{"statsUserUplink":true,"statsUserDownlink":true}},"system":{"statsInboundUplink":true,"statsInboundDownlink":true}},
-  "api": {"tag":"api","services":["HandlerService","StatsService"]},
-  "routing": {"rules":[{"type":"field","inboundTag":"api","outboundTag":"api"}]}
-}
-V2CONFEOF
-    echo '{"vless":[]}' > /etc/v2ray/users.json
+    v2ray_gen_config "$UUID"
 
     cat > /etc/systemd/system/v2ray.service << 'V2SVCEOF'
 [Unit]

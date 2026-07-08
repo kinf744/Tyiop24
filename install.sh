@@ -769,6 +769,20 @@ full_install() {
 
     unset SKIP_PAUSE
 
+    # ── Vérification finale : s'assurer que tous les services sont présents ──
+    log "Vérification finale des services..."
+    for alias_svc in dropbear-custom:dropbear sshws:ws-dropbear; do
+        local target="${alias_svc#*:}" alias="${alias_svc%:*}"
+        if systemctl cat "$target.service" &>/dev/null 2>&1 && ! systemctl cat "$alias.service" &>/dev/null 2>&1; then
+            ln -sf "/etc/systemd/system/$target.service" "/etc/systemd/system/$alias.service" 2>/dev/null
+        fi
+    done
+    systemctl daemon-reload 2>/dev/null || true
+    for svc in nginx haproxy xray v2ray dropbear-custom ssl_tls sshws hysteria zivpn udp-custom; do
+        systemctl is-active --quiet "$svc" 2>/dev/null && continue
+        systemctl restart "$svc" 2>/dev/null || true
+    done
+
     echo
     echo -e "${BG}${CYAN}║${RESET}${TITLE_BG}$(center '✅  INSTALLATION TERMINÉE  ✅' 61)${RESET}${BG}${CYAN}║${RESET}"
     echo -e "${BG}${CYAN}╚═══$(printf '═%.0s' {1..57})═══╝${RESET}"

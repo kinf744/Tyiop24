@@ -62,21 +62,27 @@ install_openssh() {
 # ================================================
 install_dropbear() {
     echo "${CYAN}━━━ Installation Dropbear (port 109) ━━━${RESET}"
-    command -v /usr/local/sbin/dropbear &>/dev/null && { warn "Dropbear déjà installé"; pause; return; }
-    apt-get install -y -qq build-essential bzip2 zlib1g-dev wget tar dos2unix 2>/dev/null
-    cd /usr/local/src
-    wget -q "https://matt.ucc.asn.au/dropbear/releases/dropbear-2022.83.tar.bz2" -O dropbear-2022.83.tar.bz2 2>/dev/null || {
-        err "Téléchargement échoué"; pause; return; }
-    tar -xjf dropbear-2022.83.tar.bz2 2>/dev/null; cd dropbear-2022.83
-    ./configure --prefix=/usr/local >/dev/null 2>&1; make -j"$(nproc)" >/dev/null 2>&1; make install >/dev/null 2>&1
+    if command -v /usr/local/sbin/dropbear &>/dev/null; then
+        if [[ ! -f /etc/systemd/system/dropbear-custom.service ]]; then
+            warn "Dropbear binaire présent, service manquant — recréation..."
+        else
+            warn "Dropbear déjà installé"; pause; return
+        fi
+    else
+        apt-get install -y -qq build-essential bzip2 zlib1g-dev wget tar dos2unix 2>/dev/null
+        cd /usr/local/src
+        wget -q "https://matt.ucc.asn.au/dropbear/releases/dropbear-2022.83.tar.bz2" -O dropbear-2022.83.tar.bz2 2>/dev/null || {
+            err "Téléchargement échoué"; pause; return; }
+        tar -xjf dropbear-2022.83.tar.bz2 2>/dev/null; cd dropbear-2022.83
+        ./configure --prefix=/usr/local >/dev/null 2>&1; make -j"$(nproc)" >/dev/null 2>&1; make install >/dev/null 2>&1
 
-    local DIR="/etc/dropbear"; mkdir -p "$DIR"
-    for key in rsa ecdsa ed25519; do
-        /usr/local/bin/dropbearkey -t "$key" -f "$DIR/dropbear_${key}_host_key" 2>/dev/null || true
-    done
-    chmod 600 "$DIR"/*_host_key 2>/dev/null || true
-
-    echo "Bienvenue sur Kighmu - Connexion autorisée" > "$DIR/banner.txt"
+        local DIR="/etc/dropbear"; mkdir -p "$DIR"
+        for key in rsa ecdsa ed25519; do
+            /usr/local/bin/dropbearkey -t "$key" -f "$DIR/dropbear_${key}_host_key" 2>/dev/null || true
+        done
+        chmod 600 "$DIR"/*_host_key 2>/dev/null || true
+        echo "Bienvenue sur Kighmu - Connexion autorisée" > "$DIR/banner.txt"
+    fi
 
     cat > /etc/systemd/system/dropbear-custom.service << 'UNIT'
 [Unit]
@@ -111,12 +117,19 @@ uninstall_dropbear() {
 # ================================================
 install_ssl_tls() {
     echo "${CYAN}━━━ Installation SSL/TLS Tunnel (port 444 → 109) ━━━${RESET}"
-    command -v ssl_tls &>/dev/null && { warn "ssl_tls déjà installé"; pause; return; }
-    apt-get install -y -qq curl 2>/dev/null
-    local url="https://github.com/kinf744/Kighmu/releases/download/v1.0.0/ssl_tls"
-    local tmp; tmp=$(mktemp -d); cd "$tmp"
-    curl -fsSL "$url" -o ssl_tls 2>/dev/null && chmod +x ssl_tls && file ssl_tls | grep -q ELF
-    install -m 0755 ssl_tls /usr/local/bin/ssl_tls; rm -rf "$tmp"
+    if command -v ssl_tls &>/dev/null; then
+        if [[ ! -f /etc/systemd/system/ssl_tls.service ]]; then
+            warn "ssl_tls binaire présent, service manquant — recréation..."
+        else
+            warn "ssl_tls déjà installé"; pause; return
+        fi
+    else
+        apt-get install -y -qq curl 2>/dev/null
+        local url="https://github.com/kinf744/Kighmu/releases/download/v1.0.0/ssl_tls"
+        local tmp; tmp=$(mktemp -d); cd "$tmp"
+        curl -fsSL "$url" -o ssl_tls 2>/dev/null && chmod +x ssl_tls && file ssl_tls | grep -q ELF
+        install -m 0755 ssl_tls /usr/local/bin/ssl_tls; rm -rf "$tmp"
+    fi
 
     cat > /etc/systemd/system/ssl_tls.service << 'UNIT'
 [Unit]
@@ -150,11 +163,18 @@ uninstall_ssl_tls() {
 # ================================================
 install_sshws() {
     echo "${CYAN}━━━ Installation SSH WS (port 80 → 109) ━━━${RESET}"
-    command -v sshws &>/dev/null && { warn "sshws déjà installé"; pause; return; }
-    local url="https://github.com/kinf744/Kighmu/releases/download/v1.0.0"
-    local tmp; tmp=$(mktemp -d); cd "$tmp"
-    curl -LO "$url/sshws" 2>/dev/null && chmod +x sshws
-    install -m 0755 sshws /usr/local/bin/sshws; rm -rf "$tmp"
+    if command -v sshws &>/dev/null; then
+        if [[ ! -f /etc/systemd/system/sshws.service ]]; then
+            warn "sshws binaire présent, service manquant — recréation..."
+        else
+            warn "sshws déjà installé"; pause; return
+        fi
+    else
+        local url="https://github.com/kinf744/Kighmu/releases/download/v1.0.0"
+        local tmp; tmp=$(mktemp -d); cd "$tmp"
+        curl -LO "$url/sshws" 2>/dev/null && chmod +x sshws
+        install -m 0755 sshws /usr/local/bin/sshws; rm -rf "$tmp"
+    fi
 
     cat > /etc/systemd/system/sshws.service << 'UNIT'
 [Unit]
