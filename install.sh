@@ -295,9 +295,9 @@ server {
     }
 }
 
-# HTTPS (port 443) — vlo.kingom.ggff.net
+# HTTPS (port 8587) — DOMAIN_PLACEHOLDER
 server {
-    listen 443 ssl http2;
+    listen 8587 ssl http2;
     server_name DOMAIN_PLACEHOLDER;
     client_max_body_size 32m;
 
