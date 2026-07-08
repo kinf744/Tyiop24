@@ -96,7 +96,6 @@ xray_gen_haproxy() {
 global
     daemon
     maxconn 65535
-    nbproc 1
     tune.ssl.default-dh-param 2048
     ssl-default-bind-ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384
     ssl-default-bind-options no-sslv3 no-tlsv10 no-tlsv11
@@ -114,29 +113,50 @@ defaults
 # NTLS (Non-TLS) frontend :8880
 frontend xray-ntls
     bind *:8880
-    use_backend xray-vmess-tcp  if { dst_port 8880 }
-    use_backend xray-vmess-ws   if { path_beg /vmess-ws }
-    use_backend xray-vless-tcp  if { dst_port 8880 }
-    use_backend xray-vless-ws   if { path_beg /vless-ws }
-    default_backend xray-vmess-tcp
+    tcp-request inspect-delay 5s
+    tcp-request content accept if { req.len ge 5 }
+    acl is_h2     req.payload(0,3) -m bin 505249
+    acl is_http   req.payload(0,4) -m bin 474554202f
+    acl is_post   req.payload(0,4) -m bin 504f5354
+    acl is_vless  req.payload(0,1) -m bin 00
+    use_backend grpc_router       if is_h2
+    use_backend xray-vmess-ws     if is_http or is_post
+    use_backend xray-vless-ws     if is_http or is_post
+    use_backend xray-vmess-tcp    if !is_vless
+    default_backend xray-vless-tcp
 
 # TLS Frontend :8443
 frontend xray-tls
     bind *:8443 ssl crt /etc/xray/xray.pem alpn h2,http/1.1
-    use_backend xray-vmess-tls  if { dst_port 8443 }
-    use_backend xray-vmess-wss  if { path_beg /vmess-wss }
-    use_backend xray-vless-tls  if { dst_port 8443 }
-    use_backend xray-vless-main-wss if { path_beg /vless-wss }
-    use_backend xray-trojan-tcp if { dst_port 8443 }
-    default_backend xray-vmess-tls
+    tcp-request inspect-delay 5s
+    tcp-request content accept if { req.len ge 5 }
+    acl is_h2     req.payload(0,3) -m bin 505249
+    acl is_http   req.payload(0,4) -m bin 474554202f
+    acl is_post   req.payload(0,4) -m bin 504f5354
+    acl is_vless  req.payload(0,1) -m bin 00
+    use_backend grpc_router       if is_h2
+    use_backend xray-vmess-wss    if is_http or is_post
+    use_backend xray-vless-main-wss if is_http or is_post
+    use_backend xray-trojan-ws    if is_http or is_post
+    use_backend xray-vmess-tls    if !is_vless
+    use_backend xray-trojan-tcp   if !is_vless
+    default_backend xray-vless-tls
 
-# gRPC + XHTTP
-frontend xray-advanced
-    bind *:9898 ssl crt /etc/xray/xray.pem alpn h2,http/1.1
-    use_backend xray-vless-grpc   if { ssl_fc_alpn h2 }
-    use_backend xray-vmess-grpc   if { ssl_fc_alpn h2 }
-    use_backend xray-trojan-grpc  if { ssl_fc_alpn h2 }
-    default_backend xray-vless-xhttp
+# Routeur gRPC/XHTTP interne (mode http)
+frontend grpc_router
+    bind 127.0.0.1:9898
+    mode http
+    timeout http-request 5s
+    use_backend xray-vmess-grpc   if { path_beg /vmess-grpc }
+    use_backend xray-vless-grpc   if { path_beg /vless-grpc }
+    use_backend xray-trojan-grpc  if { path_beg /trojan-grpc }
+    use_backend xray-vmess-xhttp  if { path_beg /vmess-xhttp }
+    use_backend xray-vless-xhttp  if { path_beg /vless-xhttp }
+    use_backend xray-trojan-xhttp if { path_beg /trojan-xhttp }
+    default_backend xray-vless-grpc
+
+backend grpc_router
+    server grpc_http 127.0.0.1:9898
 
 # Backends
 backend xray-vmess-tcp
@@ -162,16 +182,22 @@ backend xray-trojan-ws
 backend xray-ss
     server s1 127.0.0.1:10011
 backend xray-vless-xhttp
+    mode http
     server s1 127.0.0.1:10012
 backend xray-vless-grpc
+    mode http
     server s1 127.0.0.1:10013
 backend xray-vmess-xhttp
+    mode http
     server s1 127.0.0.1:10014
 backend xray-vmess-grpc
+    mode http
     server s1 127.0.0.1:10015
 backend xray-trojan-xhttp
+    mode http
     server s1 127.0.0.1:10016
 backend xray-trojan-grpc
+    mode http
     server s1 127.0.0.1:10017
 HAPEOF
 }
