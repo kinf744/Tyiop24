@@ -727,31 +727,45 @@ full_install() {
     # ── Installation de tous les services ──
     export SKIP_PAUSE=1
 
+    local GH="https://raw.githubusercontent.com/kinf744/Tyiop24/main"
+
+    # Télécharger les scripts compagnons s'ils sont absents
+    for _script in ssh.sh xray-v2ray.sh udp.sh; do
+        if [[ ! -f "$SCRIPT_DIR/$_script" ]]; then
+            log "Téléchargement de $_script depuis GitHub..."
+            if ! curl -fsSL "$GH/$_script" -o "$SCRIPT_DIR/$_script"; then
+                err "Échec du téléchargement de $_script — installation annulée"
+                return 1
+            fi
+            chmod +x "$SCRIPT_DIR/$_script"
+        fi
+    done
+
     log "Installation des services SSH..."
-    source "$SCRIPT_DIR/ssh.sh" 2>/dev/null || true
-    install_openssh 2>/dev/null || true
-    install_dropbear 2>/dev/null || true
-    install_ssl_tls 2>/dev/null || true
-    install_sshws 2>/dev/null || true
-    install_sockspy 2>/dev/null || true
-    install_wstunnel 2>/dev/null || true
-    install_socks_python 2>/dev/null || true
-    install_ws_services 2>/dev/null || true
-    install_slowdns 2>/dev/null || true
+    source "$SCRIPT_DIR/ssh.sh" || { err "ssh.sh introuvable"; return 1; }
+    install_openssh
+    install_dropbear
+    install_ssl_tls
+    install_sshws
+    install_sockspy
+    install_wstunnel
+    install_socks_python
+    install_ws_services
+    install_slowdns
 
     log "Installation des services Xray & V2Ray..."
-    source "$SCRIPT_DIR/xray-v2ray.sh" 2>/dev/null || true
-    install_xray 2>/dev/null || true
-    install_v2ray 2>/dev/null || true
-    setup_xray_watchdog 2>/dev/null || true
+    source "$SCRIPT_DIR/xray-v2ray.sh" || { err "xray-v2ray.sh introuvable"; return 1; }
+    install_xray
+    install_v2ray
+    setup_xray_watchdog
 
     log "Installation des services UDP..."
-    source "$SCRIPT_DIR/udp.sh" 2>/dev/null || true
-    install_zivpn 2>/dev/null || true
-    install_hysteria 2>/dev/null || true
-    install_badvpn 2>/dev/null || true
-    install_udp_custom 2>/dev/null || true
-    apply_network_optimizations 2>/dev/null || true
+    source "$SCRIPT_DIR/udp.sh" || { err "udp.sh introuvable"; return 1; }
+    install_zivpn
+    install_hysteria
+    install_badvpn
+    install_udp_custom
+    apply_network_optimizations
 
     unset SKIP_PAUSE
 
