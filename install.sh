@@ -295,9 +295,10 @@ server {
     }
 }
 
-# HTTPS (port 8587) — DOMAIN_PLACEHOLDER
+# HTTPS (port 8587 + 446) — DOMAIN_PLACEHOLDER
 server {
     listen 8587 ssl http2;
+    listen 446 ssl http2;
     server_name DOMAIN_PLACEHOLDER;
     client_max_body_size 32m;
 
@@ -396,7 +397,7 @@ INITEOF
 table inet kighmu-panel {
     chain input {
         type filter hook input priority 0; policy accept;
-        tcp dport { 8585, 8587 } accept
+        tcp dport { 8585, 8587, 446 } accept
     }
 }
 PNLEOF
