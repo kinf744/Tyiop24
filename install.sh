@@ -2188,13 +2188,14 @@ menu_desinstalle() {
             if [[ "$CONFIRM" == "PURGE" ]]; then
                 # ── 1. Arrêt de tous les services ──
                 echo -e "${YELLOW}  [1/12] Arrêt de tous les services...${RESET}"
-                for s in $(systemctl list-units --type=service --all --no-legend 2>/dev/null | awk '{print $1}' | sed 's/\.service//' | grep -iE 'xray|v2ray|nginx|haproxy|hysteria|zivpn|dropbear|sshws|ws-|stunnel|socks|udp-custom|slowdns|dnsdist|bot2|mysql|kighmu|panel|badvpn|nftables-tunnel|proxy|pm2'); do
+                for s in $(systemctl list-units --type=service --all --no-legend 2>/dev/null | awk '{print $1}' | sed 's/\.service//' | grep -iE 'xray|v2ray|nginx|haproxy|hysteria|zivpn|dropbear|sshws|ws-|stunnel|socks|udp-custom|slowdns|dnsdist|bot2|mysql|kighmu|panel|badvpn|nftables-tunnel|proxy|pm2|kighmu-cleanup'); do
                     systemctl disable --now "$s" 2>/dev/null || true
                 done
                 # Force kill any remaining custom processes
                 pkill -9 -f "xray|dnstt-server|hysteria|zivpn|wstunnel|ws-dropbear|ws-stunnel|slowdns|proxy--ws|KIGHMUPROXY|udp-custom|badvpn|bot2" 2>/dev/null || true
                 sleep 1
-                pm2 kill 2>/dev/null || true; pm2 unstartup 2>/dev/null || true
+                pm2 kill 2>/dev/null || true; pm2 cleardump 2>/dev/null || true; pm2 unstartup 2>/dev/null || true
+                rm -f /root/.pm2/dump.pm2 2>/dev/null || true
 
                 # ── 2. Suppression de tous les binaires ──
                 echo -e "${YELLOW}  [2/12] Suppression des binaires...${RESET}"
@@ -2226,18 +2227,21 @@ menu_desinstalle() {
                 # ── 3. Suppression fichiers systemd ──
                 echo -e "${YELLOW}  [3/12] Suppression des services systemd...${RESET}"
                 rm -f \
-                    /etc/systemd/system/{xray,v2ray,nginx,haproxy,hysteria,zivpn,dropbear-custom,sshws,ssl_tls,proxy--ws,ws-dropbear,ws-stunnel,socks_python_ws,socks_python,udp-custom,badvpn@,slowdns-ns4,slowdns-nv4,dnsdist,bot2,kighmu-bandwidth,kighmu-panel,pm2-kighmu}.service \
+                    /etc/systemd/system/{xray,v2ray,nginx,haproxy,hysteria,zivpn,dropbear-custom,sshws,ssl_tls,proxy--ws,ws-dropbear,ws-stunnel,socks_python_ws,socks_python,udp-custom,badvpn@,slowdns-ns4,slowdns-nv4,dnsdist,bot2,kighmu-bandwidth,kighmu-panel,pm2-kighmu,kighmu-cleanup}.service \
                     /etc/systemd/system/nftables-tunnel@*.service \
                     /etc/systemd/system/mysql.service 2>/dev/null || true
                 rm -rf /etc/systemd/system/dnsdist.service.d 2>/dev/null || true
-                find /etc/systemd/system/ -name '*kighmu*' -o -name '*slowdns*' -o -name '*ws-*' -o -name '*socks*' -o -name '*badvpn*' -o -name '*udp-custom*' -o -name '*sshws*' 2>/dev/null | xargs rm -f 2>/dev/null || true
+                find /etc/systemd/system/ -name '*kighmu*' -o -name '*slowdns*' -o -name '*ws-*' -o -name '*socks*' -o -name '*badvpn*' -o -name '*udp-custom*' -o -name '*sshws*' -o -name '*cleanup*' 2>/dev/null | xargs rm -f 2>/dev/null || true
+                # Supprimer les symlinks dans multi-user.target.wants
+                find /etc/systemd/system/multi-user.target.wants/ -name '*kighmu*' -o -name '*xray*' -o -name '*v2ray*' -o -name '*slowdns*' -o -name '*badvpn*' -o -name '*sshws*' -o -name '*hysteria*' -o -name '*zivpn*' -o -name '*dropbear*' -o -name '*udp-custom*' -o -name '*nginx*' -o -name '*haproxy*' -o -name '*mysql*' -o -name '*cleanup*' 2>/dev/null | xargs rm -f 2>/dev/null || true
 
                 # ── 4. Purge nftables + iptables ──
                 echo -e "${YELLOW}  [4/12] Purge nftables + iptables...${RESET}"
-                for t in $(nft list tables 2>/dev/null | grep -oP '(?<=table inet )\S+' | grep -iE 'kighmu|slowdns|xray|v2ray|zivpn|hysteria|badvpn|udp-custom|dropbear|panel'); do
+                for t in $(nft list tables 2>/dev/null | grep -oP '(?<=table inet )\S+' | grep -iE 'kighmu|slowdns|xray|v2ray|zivpn|hysteria|badvpn|udp-custom|dropbear|panel|proxy'); do
                     nft delete table inet "$t" 2>/dev/null || true
                 done
                 nft flush ruleset 2>/dev/null || true
+                rm -f /etc/nftables/*.nft 2>/dev/null || true
                 rm -f /etc/nftables/*.nft 2>/dev/null || true
                 # Reset iptables to default (allow all)
                 iptables -P INPUT ACCEPT 2>/dev/null; iptables -P FORWARD ACCEPT 2>/dev/null; iptables -P OUTPUT ACCEPT 2>/dev/null
@@ -2248,6 +2252,12 @@ menu_desinstalle() {
 
                 # ── 5. Suppression répertoires configurables + données ──
                 echo -e "${YELLOW}  [5/12] Suppression des configurations...${RESET}"
+                # Supprimer la base de données MySQL
+                if command -v mysql &>/dev/null; then
+                    mysql -e "DROP DATABASE IF EXISTS \`${DB_NAME:-kighmu}\`;" 2>/dev/null || true
+                    mysql -e "DROP USER IF EXISTS '${DB_USER:-kighmu}'@'localhost';" 2>/dev/null || true
+                    mysql -e "FLUSH PRIVILEGES;" 2>/dev/null || true
+                fi
                 rm -rf \
                     /etc/kighmu /etc/kighmu-v2 /etc/xray /etc/v2ray \
                     /etc/hysteria /etc/zivpn /etc/slowdns /etc/dnsdist \
@@ -2256,8 +2266,7 @@ menu_desinstalle() {
                     /opt/kighmu-panel /root/Kighmu /root/.pm2 \
                     /root/.npm /root/.config /root/.cache \
                     /root/socksenv /var/lib/mysql \
-                    /var/www/html /root/.acme.sh \
-                    /root/.local/share/opencode 2>/dev/null || true
+                    /var/www/html /root/.acme.sh 2>/dev/null || true
                 rm -f \
                     /etc/profile.d/kighmu-panel.sh \
                     /etc/sysctl.d/99-v2ray.conf \
