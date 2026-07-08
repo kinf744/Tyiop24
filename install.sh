@@ -257,54 +257,6 @@ configure_nginx() {
     systemctl stop nginx 2>/dev/null || true
     rm -f /etc/nginx/sites-enabled/default 2>/dev/null || true
     cat > /etc/nginx/sites-available/kighmu << 'NGXEOF'
-# HTTP (port 80) — catch-all : SSH WS, WS-dropbear, WS-stunnel + Panel
-server {
-    listen 80 default_server;
-    server_name _;
-    client_max_body_size 32m;
-
-    location /ssh-ws {
-        proxy_pass http://127.0.0.1:2086;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_read_timeout 86400;
-    }
-
-    location /ws-dropbear {
-        proxy_pass http://127.0.0.1:2095;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_read_timeout 86400;
-    }
-
-    location /ws-stunnel {
-        proxy_pass http://127.0.0.1:700;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_read_timeout 86400;
-    }
-
-    location / {
-        proxy_pass http://127.0.0.1:3000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_read_timeout 86400;
-    }
-}
-
 # Panel — accès direct par IP (port 8585)
 server {
     listen 8585;
@@ -343,28 +295,71 @@ server {
     }
 }
 
-# HTTP (port 80) — redirection vers HTTPS pour le domaine
+# HTTPS (port 443) — vlo.kingom.ggff.net
 server {
-    listen 80;
+    listen 443 ssl http2;
     server_name DOMAIN_PLACEHOLDER;
-    return 301 https://$host$request_uri;
+    client_max_body_size 32m;
+
+    ssl_certificate /etc/letsencrypt/live/DOMAIN_PLACEHOLDER/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/DOMAIN_PLACEHOLDER/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_read_timeout 86400;
+    }
+
+    location /ws-dropbear {
+        proxy_pass http://127.0.0.1:2095;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_read_timeout 86400;
+    }
+
+    location /ws-stunnel {
+        proxy_pass http://127.0.0.1:700;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_read_timeout 86400;
+    }
 }
 NGXEOF
     sed -i "s/DOMAIN_PLACEHOLDER/$DOMAIN/g" /etc/nginx/sites-available/kighmu
     ln -sf /etc/nginx/sites-available/kighmu /etc/nginx/sites-enabled/
     nginx -t 2>/dev/null && systemctl start nginx && log "Nginx OK (port 8585)" || err "Nginx invalide"
     if [[ "$DOMAIN" =~ \. ]] && ! [[ "$DOMAIN" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-        local svc_port80; svc_port80=$(ss -tlnp | grep ':80 ' | head -1)
-        if [[ -n "$svc_port80" ]]; then
-            warn "Le port 80 est occupé ($svc_port80). Certbot ACME nécessite le port 80."
-            warn "Arrêt temporaire du service sur le port 80 pour certbot..."
-            local pid80; pid80=$(ss -tlnp | grep ':80 ' | grep -oP 'pid=\K[0-9]+')
-            [[ -n "$pid80" ]] && kill "$pid80" 2>/dev/null; sleep 1
-        fi
-        DEBIAN_FRONTEND=noninteractive apt-get install -y -qq certbot python3-certbot-nginx 2>/dev/null
-        certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos -m "admin@$DOMAIN" 2>/dev/null && \
+        DEBIAN_FRONTEND=noninteractive apt-get install -y -qq certbot 2>/dev/null
+        # Le port 80 est utilisé par sshws — on utilise standalone avec hooks
+        mkdir -p /etc/letsencrypt/renewal-hooks/pre /etc/letsencrypt/renewal-hooks/post
+        cat > /etc/letsencrypt/renewal-hooks/pre/sshws-stop.sh << 'HOOK'
+#!/bin/bash
+systemctl stop sshws 2>/dev/null || true
+sleep 1
+HOOK
+        cat > /etc/letsencrypt/renewal-hooks/post/sshws-start.sh << 'HOOK'
+#!/bin/bash
+systemctl start sshws 2>/dev/null || true
+HOOK
+        chmod +x /etc/letsencrypt/renewal-hooks/pre/sshws-stop.sh /etc/letsencrypt/renewal-hooks/post/sshws-start.sh
+        systemctl stop sshws 2>/dev/null || true
+        certbot certonly --standalone --preferred-challenges http -d "$DOMAIN" --non-interactive --agree-tos -m "admin@$DOMAIN" 2>/dev/null && \
             log "Certificat SSL obtenu pour $DOMAIN" || \
             warn "Certbot a échoué pour $DOMAIN (vérifiez que le DNS pointe ici)"
+        systemctl start sshws 2>/dev/null || true
     fi
 }
 

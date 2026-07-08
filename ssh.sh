@@ -149,7 +149,7 @@ uninstall_ssl_tls() {
 # SSH WS (Slipstream)
 # ================================================
 install_sshws() {
-    echo "${CYAN}━━━ Installation SSH WS (port 2086 → 109) ━━━${RESET}"
+    echo "${CYAN}━━━ Installation SSH WS (port 80 → 109) ━━━${RESET}"
     command -v sshws &>/dev/null && { warn "sshws déjà installé"; pause; return; }
     local url="https://github.com/kinf744/Kighmu/releases/download/v1.0.0"
     local tmp; tmp=$(mktemp -d); cd "$tmp"
@@ -162,7 +162,7 @@ Description=SSHWS Slipstream Tunnel
 After=network.target
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/sshws -listen 2086 -target-host 127.0.0.1 -target-port 109
+ExecStart=/usr/local/bin/sshws -listen 80 -target-host 127.0.0.1 -target-port 109
 Restart=always
 RestartSec=2
 User=root
@@ -171,8 +171,8 @@ LimitNOFILE=1048576
 WantedBy=multi-user.target
 UNIT
     systemctl daemon-reload && systemctl enable --now sshws.service 2>/dev/null || true
-    deploy_nft_tunnel sshws 'table inet sshws { chain input { type filter hook input priority 0; policy accept; tcp dport 2086 accept; }; }'
-    log "SSH WS actif (port 2086 → 109)"; pause
+    deploy_nft_tunnel sshws 'table inet sshws { chain input { type filter hook input priority 0; policy accept; tcp dport 80 accept; }; }'
+    log "SSH WS actif (port 80 → 109)"; pause
 }
 
 uninstall_sshws() {
