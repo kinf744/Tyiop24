@@ -848,6 +848,7 @@ install_slowdns() {
     fi
     echo "$NS4" > "$DIR/ns.conf"
     echo "$NV4" > "$DIR/nv4/ns.conf"
+    printf 'MODE=man\nNS4=%s\nNV4=%s\n' "$NS4" "$NV4" > "$DIR/install.env"
 
     cat > /usr/local/bin/slowdns-ns4-start.sh << STARTEOF
 #!/bin/bash
@@ -884,12 +885,14 @@ UNIT
         systemctl daemon-reload && systemctl enable --now "${svc}.service" 2>/dev/null || true
     done
 
-    cat > /etc/dnsdist/dnsdist.conf << 'DNSDEOF'
+    cat > /etc/dnsdist/dnsdist.conf << DNSDEOF
 setSecurityPollSuffix("")
 setACL({"0.0.0.0/0","::/0"})
 addLocal("0.0.0.0:5300")
 newServer({address="127.0.0.1:5353",pool="ns4"})
 newServer({address="127.0.0.1:5354",pool="nv4"})
+addAction(makeRule("$NS4."), PoolAction("ns4"))
+addAction(makeRule("$NV4."), PoolAction("nv4"))
 addAction(AllRule(), RCodeAction(5))
 DNSDEOF
     mkdir -p /etc/systemd/system/dnsdist.service.d

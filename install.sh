@@ -404,6 +404,7 @@ setup_traffic_collection() {
     mkdir -p /etc/slowdns/nv4
     echo "${NS4:-ns4.kingom.ggff.net}" > /etc/slowdns/ns.conf
     echo "${NV4:-nv4.kingom.ggff.net}" > /etc/slowdns/nv4/ns.conf
+    printf 'MODE=man\nNS4=%s\nNV4=%s\n' "${NS4:-ns4.kingom.ggff.net}" "${NV4:-nv4.kingom.ggff.net}" > /etc/slowdns/install.env
 
     REPORT_SECRET=${REPORT_SECRET:-$(grep '^REPORT_SECRET=' "$PANEL_DIR/.env" 2>/dev/null | cut -d= -f2 || echo "")}
 
