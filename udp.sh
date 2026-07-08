@@ -409,8 +409,8 @@ StandardError=append:/var/log/udp-custom.log
 WantedBy=multi-user.target
 UNIT
     systemctl daemon-reload && systemctl enable --now udp-custom 2>/dev/null || true
-    deploy_nft_tunnel udp-custom 'table inet udp-custom { chain input { type filter hook input priority 0; policy accept; udp dport 36712 accept; }; chain prerouting { type nat hook prerouting priority -100; udp dport != { 5667, 6000-50000 } dnat to :36712; }; }'
-    log "UDP Custom actif (port 36712, DNAT 1-65535)"; pause
+    deploy_nft_tunnel udp-custom 'table inet udp-custom { chain input { type filter hook input priority 0; policy accept; udp dport 36712 accept; }; chain prerouting { type nat hook prerouting priority -100; udp dport != { 53, 5300, 5353, 5354, 5667, 6000-50000 } dnat to :36712; }; }'
+    log "UDP Custom actif (port 36712, DNAT avec exclusions DNS/SlowDNS)"; pause
 }
 
 uninstall_udp_custom() {
