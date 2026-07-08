@@ -1,8 +1,6 @@
 #!/bin/bash
 # Kighmu - Tunnels UDP
 # ZIVPN, Hysteria v1, BadVPN, UDP Custom
-set -uo pipefail
-
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PANEL_DIR="/opt/kighmu-panel"
 DB_NAME="kighmu_panel"

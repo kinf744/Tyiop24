@@ -127,12 +127,11 @@ install_mysql() {
     mysql -e "CREATE USER IF NOT EXISTS '${DB_USER}'@'localhost' IDENTIFIED BY '${DB_PASS}';" 2>/dev/null
     mysql -e "GRANT ALL PRIVILEGES ON ${DB_NAME}.* TO '${DB_USER}'@'localhost'; FLUSH PRIVILEGES;" 2>/dev/null
 
+    local GH="https://raw.githubusercontent.com/kinf744/Tyiop24/main"
     if [[ -f "$PANEL_DIR/schema.sql" ]]; then
         mysql "${DB_NAME}" < "$PANEL_DIR/schema.sql" 2>/dev/null && log "Schema importé" || warn "Schema déjà présent"
-    elif [[ -f "$SCRIPT_DIR/panel.sh" ]]; then
-        source "$SCRIPT_DIR/panel.sh" && extract_web_panel "$PANEL_DIR" && mysql "${DB_NAME}" < "$PANEL_DIR/schema.sql" 2>/dev/null && log "Schema importé via panel.sh"
     else
-        curl -fsSL "https://raw.githubusercontent.com/kinf744/Tyiop24/main/panel.sh" -o /tmp/panel.sh 2>/dev/null && source /tmp/panel.sh && extract_web_panel "$PANEL_DIR" && mysql "${DB_NAME}" < "$PANEL_DIR/schema.sql" 2>/dev/null && log "Schema importé (GitHub)" && rm -f /tmp/panel.sh || warn "Schema non trouvé"
+        curl -fsSL "$GH/schema.sql" -o /tmp/schema.sql 2>/dev/null && mysql "${DB_NAME}" < /tmp/schema.sql 2>/dev/null && log "Schema importé (GitHub)" && rm -f /tmp/schema.sql || warn "Schema non trouvé"
     fi
     log "Base de données prête"
 }
@@ -253,6 +252,7 @@ configure_nginx() {
     local IP; IP=$(hostname -I | awk '{print $1}')
     echo -e "${BG}  ${LAV}Domaine/IP pour le panel [${CYAN}$IP${LAV}]${RESET}"
     echo -ne "${BG}${WHITE}  » ${RESET}"; read -r DOMAIN; DOMAIN=${DOMAIN:-$IP}
+    mkdir -p /etc/kighmu /etc/nginx/sites-available /etc/nginx/sites-enabled
     echo "$DOMAIN" > /etc/kighmu/domain.txt 2>/dev/null || true
     systemctl stop nginx 2>/dev/null || true
     rm -f /etc/nginx/sites-enabled/default 2>/dev/null || true
@@ -2267,6 +2267,8 @@ menu_desinstalle() {
                     /root/.npm /root/.config /root/.cache \
                     /root/socksenv /var/lib/mysql \
                     /var/www/html /root/.acme.sh 2>/dev/null || true
+                # Supprimer les résidus acme.sh dans les profils shell
+                sed -i '/acme\.sh/d' /root/.bashrc /root/.profile /root/.bash_profile 2>/dev/null || true
                 rm -f \
                     /etc/profile.d/kighmu-panel.sh \
                     /etc/sysctl.d/99-v2ray.conf \
@@ -2348,7 +2350,7 @@ menu_desinstalle() {
 #!/bin/bash
 rm -rf /etc/kighmu /etc/kighmu-v2 /root/Kighmu /root/.kighmu_info 2>/dev/null
 rm -f /etc/profile.d/kighmu-panel.sh 2>/dev/null
-sed -i '/kighmu\|Kighmu/d' /root/.bashrc /root/.profile 2>/dev/null
+sed -i '/kighmu\|Kighmu\|acme\.sh/d' /root/.bashrc /root/.profile 2>/dev/null
 systemctl daemon-reload 2>/dev/null
 rm -f /tmp/cleanup-reboot.sh /etc/systemd/system/kighmu-cleanup.service 2>/dev/null
 CLEANUP

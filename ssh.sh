@@ -1,8 +1,6 @@
 #!/bin/bash
 # Kighmu - Tunnels SSH
 # OpenSSH, Dropbear, SlowDNS, SSL/TLS, WS, SOCKS, wstunnel
-set -uo pipefail
-
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PANEL_DIR="/opt/kighmu-panel"
 
