@@ -2138,7 +2138,7 @@ menu_cek_bandwidth() {
 }
 
 menu_desinstalle() {
- sub_header 'DESINSTALLATION'
+	sub_header 'DESINSTALLATION'
     printf "${BG}╔══════════════════════════════════════════════════════════════════════╗${RESET}\n"
     printf "${BG}║${RESET}  ${RED}╔════════════════════════════════════════════════════════════════╗${RESET}  ${BG}║${RESET}\n"
     printf "${BG}║${RESET}  ${RED}║${RESET}  ${WHITE}⚠  ATTENTION : Action irréversible  ⚠${RESET}                 ${RED}║${RESET}  ${BG}║${RESET}\n"
@@ -2159,9 +2159,12 @@ menu_desinstalle() {
             if [[ "$CONFIRM" == "PURGE" ]]; then
                 # ── 1. Arrêt de tous les services ──
                 echo -e "${YELLOW}  [1/12] Arrêt de tous les services...${RESET}"
-                for s in $(systemctl list-units --type=service --all --no-legend 2>/dev/null | awk '{print $1}' | sed 's/\.service//' | grep -E 'xray|v2ray|nginx|haproxy|hysteria|zivpn|dropbear|sshws|ws-|stunnel|socks|udp-custom|slowdns|dnsdist|bot2|mysql|kighmu|panel|badvpn|nftables-tunnel|proxy'); do
+                for s in $(systemctl list-units --type=service --all --no-legend 2>/dev/null | awk '{print $1}' | sed 's/\.service//' | grep -iE 'xray|v2ray|nginx|haproxy|hysteria|zivpn|dropbear|sshws|ws-|stunnel|socks|udp-custom|slowdns|dnsdist|bot2|mysql|kighmu|panel|badvpn|nftables-tunnel|proxy|pm2'); do
                     systemctl disable --now "$s" 2>/dev/null || true
-                done && sleep 2
+                done
+                # Force kill any remaining custom processes
+                pkill -9 -f "xray|dnstt-server|hysteria|zivpn|wstunnel|ws-dropbear|ws-stunnel|slowdns|proxy--ws|KIGHMUPROXY|udp-custom|badvpn|bot2" 2>/dev/null || true
+                sleep 1
                 pm2 kill 2>/dev/null || true; pm2 unstartup 2>/dev/null || true
 
                 # ── 2. Suppression de tous les binaires ──
@@ -2184,8 +2187,11 @@ menu_desinstalle() {
                     /usr/local/bin/kighmu-bandwidth.sh \
                     /usr/local/bin/slowdns-ns4-start.sh \
                     /usr/local/bin/slowdns-nv4-start.sh \
+                    /usr/local/bin/slowdns-watchdog.sh \
+                    /usr/local/bin/slowdns-update-ip.sh \
                     /usr/local/bin/geoip.dat \
                     /usr/local/bin/geosite.dat \
+                    /usr/local/bin/kighmu-panel.sh \
                     /root/Kighmu/bot2 2>/dev/null || true
 
                 # ── 3. Suppression fichiers systemd ──
@@ -2193,17 +2199,18 @@ menu_desinstalle() {
                 rm -f \
                     /etc/systemd/system/{xray,v2ray,nginx,haproxy,hysteria,zivpn,dropbear-custom,sshws,ssl_tls,proxy--ws,ws-dropbear,ws-stunnel,socks_python_ws,socks_python,udp-custom,badvpn@,slowdns-ns4,slowdns-nv4,dnsdist,bot2,kighmu-bandwidth,kighmu-panel,pm2-kighmu}.service \
                     /etc/systemd/system/nftables-tunnel@*.service \
-                    /etc/systemd/system/mysql.service \
-                    /etc/systemd/system/dnsdist.service.d/restart.conf 2>/dev/null || true
-                find /etc/systemd/system/ -name '*kighmu*' -o -name '*slowdns*' -o -name '*ws-*' -o -name '*socks*' -o -name '*badvpn*' -o -name '*udp-custom*' 2>/dev/null | xargs rm -f 2>/dev/null || true
+                    /etc/systemd/system/mysql.service 2>/dev/null || true
+                rm -rf /etc/systemd/system/dnsdist.service.d 2>/dev/null || true
+                find /etc/systemd/system/ -name '*kighmu*' -o -name '*slowdns*' -o -name '*ws-*' -o -name '*socks*' -o -name '*badvpn*' -o -name '*udp-custom*' -o -name '*sshws*' 2>/dev/null | xargs rm -f 2>/dev/null || true
 
                 # ── 4. Purge nftables + iptables ──
                 echo -e "${YELLOW}  [4/12] Purge nftables + iptables...${RESET}"
-                for t in $(nft list tables 2>/dev/null | grep -oP '(?<=table inet )\S+' | grep -E 'kighmu|slowdns|xray|v2ray|zivpn|hysteria|badvpn|udp-custom|dropbear|panel'); do
+                for t in $(nft list tables 2>/dev/null | grep -oP '(?<=table inet )\S+' | grep -iE 'kighmu|slowdns|xray|v2ray|zivpn|hysteria|badvpn|udp-custom|dropbear|panel'); do
                     nft delete table inet "$t" 2>/dev/null || true
                 done
                 nft flush ruleset 2>/dev/null || true
                 rm -f /etc/nftables/*.nft 2>/dev/null || true
+                # Reset iptables to default (allow all)
                 iptables -P INPUT ACCEPT 2>/dev/null; iptables -P FORWARD ACCEPT 2>/dev/null; iptables -P OUTPUT ACCEPT 2>/dev/null
                 iptables -t nat -F 2>/dev/null; iptables -t mangle -F 2>/dev/null; iptables -F 2>/dev/null; iptables -X 2>/dev/null
                 ip6tables -P INPUT ACCEPT 2>/dev/null; ip6tables -P FORWARD ACCEPT 2>/dev/null; ip6tables -P OUTPUT ACCEPT 2>/dev/null
@@ -2253,13 +2260,20 @@ menu_desinstalle() {
                     groupdel "$g" 2>/dev/null || true
                 done
 
-                # ── 9. Nettoyage crontab + resolv.conf + sysctl ──
-                echo -e "${YELLOW}  [9/12] Nettoyage crontab, resolv, sysctl...${RESET}"
+                # ── 9. Restauration SSH par défaut + resolv.conf + sysctl ──
+                echo -e "${YELLOW}  [9/12] Restauration SSH, resolv.conf, sysctl...${RESET}"
+                # Restaurer sshd_config (enlever Banner, Port custom)
+                sed -i '/^Banner /d' /etc/ssh/sshd_config 2>/dev/null || true
+                sed -i '/^Port /d' /etc/ssh/sshd_config 2>/dev/null || true
+                rm -f /etc/ssh/banner.txt 2>/dev/null || true
+                systemctl restart ssh 2>/dev/null || true
+                # Restaurer resolv.conf
                 crontab -r 2>/dev/null || true
                 chattr -i /etc/resolv.conf 2>/dev/null || true
                 echo "nameserver 1.1.1.1" > /etc/resolv.conf
                 chattr +i /etc/resolv.conf 2>/dev/null || true
-                rm -f /etc/sysctl.d/99-v2ray.conf /etc/sysctl.d/99-slowdns.conf 2>/dev/null || true
+                # Nettoyer sysctl
+                rm -f /etc/sysctl.d/99-*.conf 2>/dev/null || true
                 sed -i '/^net\.core\.default_qdisc/d; /^net\.ipv4\.tcp_congestion_control/d; /^net\.ipv4\.tcp_notsent_lowat/d; /^net\.ipv4\.tcp_fastopen/d; /^fs\.file-max/d' /etc/sysctl.conf 2>/dev/null || true
                 sysctl -p 2>/dev/null || true
 
@@ -2278,21 +2292,52 @@ menu_desinstalle() {
                 rm -f /etc/apt/sources.list.d/nodesource.list 2>/dev/null || true
                 apt-get update 2>/dev/null || true
 
-                # ── 11. Nettoyage temp + reliquats ──
-                echo -e "${YELLOW}  [11/12] Nettoyage des fichiers temporaires...${RESET}"
+                # ── 11. Nettoyage temp + reliquats + autostart panel ──
+                echo -e "${YELLOW}  [11/12] Nettoyage complet...${RESET}"
                 rm -rf /tmp/{Tyiop24,Kighmu,wstunnel_inst,xray_inst,panel.sh} 2>/dev/null || true
                 rm -f /root/install.sh /root/udp.sh /root/ssh.sh /root/xray-v2ray.sh /root/panel.sh 2>/dev/null || true
                 find /root -maxdepth 1 -name '*.sh' -o -name '*.tar.gz' -o -name '*.zip' 2>/dev/null | xargs rm -f 2>/dev/null || true
                 rm -rf /usr/local/lib/node_modules 2>/dev/null || true
                 rm -f /usr/local/bin/{pm2,node,npm,npx} 2>/dev/null || true
+                # Supprimer l'autostart du panel
+                sed -i '/kighmu\|kighmu-panel\|Kighmu\|panel\.sh/d' /root/.bashrc /root/.profile 2>/dev/null || true
+                rm -f /usr/local/bin/kighmu-panel.sh 2>/dev/null || true
 
-                # ── 12. Rechargement systemd + message final ──
+                # ── 12. Rechargement systemd + cleanup post-reboot ──
                 systemctl daemon-reload 2>/dev/null || true
+                # Créer un script post-reboot pour enlever les derniers résidus
+                cat > /tmp/cleanup-reboot.sh << 'CLEANUP'
+#!/bin/bash
+rm -rf /etc/kighmu /etc/kighmu-v2 /root/Kighmu /root/.kighmu_info 2>/dev/null
+rm -f /etc/profile.d/kighmu-panel.sh 2>/dev/null
+sed -i '/kighmu\|Kighmu/d' /root/.bashrc /root/.profile 2>/dev/null
+systemctl daemon-reload 2>/dev/null
+rm -f /tmp/cleanup-reboot.sh /etc/systemd/system/kighmu-cleanup.service 2>/dev/null
+CLEANUP
+                chmod +x /tmp/cleanup-reboot.sh
+                cat > /etc/systemd/system/kighmu-cleanup.service << 'CLNSRV'
+[Unit]
+Description=Kighmu cleanup after reboot
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/tmp/cleanup-reboot.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+CLNSRV
+                systemctl daemon-reload 2>/dev/null
+                systemctl enable kighmu-cleanup.service 2>/dev/null || true
+
                 echo
                 echo -e "${GREEN}  ╔═══════════════════════════════════════════════════════╗${RESET}"
                 echo -e "${GREEN}  ║${RESET}  ✓ Désinstallation COMPLÈTE terminée               ${GREEN}║${RESET}"
                 echo -e "${GREEN}  ║${RESET}  ${WHITE}VPS nettoyé — état d'origine${RESET}              ${GREEN}║${RESET}"
                 echo -e "${GREEN}  ║${RESET}  ${YELLOW}Recommandé : reboot${RESET}                      ${GREEN}║${RESET}"
+                echo -e "${GREEN}  ║${RESET}  ${DIM}(un cleanup post-reboot supprimera les${RESET}      ${GREEN}║${RESET}"
+                echo -e "${GREEN}  ║${RESET}  ${DIM} derniers résidus)${RESET}                          ${GREEN}║${RESET}"
                 echo -e "${GREEN}  ╚═══════════════════════════════════════════════════════╝${RESET}"
             else
                 echo -e "  ${YELLOW}Désinstallation annulée.${RESET}"
