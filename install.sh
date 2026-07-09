@@ -94,6 +94,10 @@ install_system_deps() {
         cron bash-completion ca-certificates lsof \
         build-essential cmake python3 python3-pip \
         git nginx mysql-server 2>/dev/null
+    # Reinstall si les fichiers de base ont été supprimés (ex: désinstallation incomplète)
+    [[ ! -f /etc/nginx/nginx.conf ]] && apt-get install --reinstall -y -qq nginx 2>/dev/null
+    [[ ! -f /etc/mysql/my.cnf ]] && apt-get install --reinstall -y -qq mysql-server 2>/dev/null
+    [[ ! -f /etc/haproxy/haproxy.cfg ]] && apt-get install --reinstall -y -qq haproxy 2>/dev/null
     log "Dépendances installées"
 }
 
@@ -2260,15 +2264,25 @@ menu_desinstalle() {
                     mysql -e "DROP USER IF EXISTS '${DB_USER:-kighmu}'@'localhost';" 2>/dev/null || true
                     mysql -e "FLUSH PRIVILEGES;" 2>/dev/null || true
                 fi
+                # Ne PAS supprimer /etc/nginx /etc/mysql /etc/haproxy /etc/dropbear /etc/stunnel
+                # (sinon apt n'en recrée pas les fichiers de base au prochain install)
                 rm -rf \
                     /etc/kighmu /etc/kighmu-v2 /etc/xray /etc/v2ray \
                     /etc/hysteria /etc/zivpn /etc/slowdns /etc/dnsdist \
-                    /etc/dropbear /etc/stunnel /etc/udp-custom \
-                    /etc/haproxy /etc/nginx /etc/mysql \
+                    /etc/udp-custom \
                     /opt/kighmu-panel /root/Kighmu /root/.pm2 \
                     /root/.npm /root/.config /root/.cache \
                     /root/socksenv /var/lib/mysql \
                     /var/www/html /root/.acme.sh 2>/dev/null || true
+                rm -f \
+                    /etc/nginx/sites-available/kighmu \
+                    /etc/nginx/sites-enabled/kighmu \
+                    /etc/haproxy/haproxy.cfg \
+                    /etc/stunnel/stunnel.conf \
+                    /etc/dropbear/dropbear_dss_host_key \
+                    /etc/dropbear/dropbear_rsa_host_key \
+                    /etc/dropbear/dropbear_ecdsa_host_key \
+                    /etc/dropbear/dropbear_ed25519_host_key 2>/dev/null || true
                 # Supprimer les résidus acme.sh dans les profils shell
                 sed -i '/acme\.sh/d' /root/.bashrc /root/.profile /root/.bash_profile 2>/dev/null || true
                 rm -f \
