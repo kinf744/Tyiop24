@@ -1,7 +1,7 @@
 #!/bin/bash
 # Kighmu - Tunnels SSH
 # OpenSSH, Dropbear, SlowDNS, SSL/TLS, WS, SOCKS, wstunnel
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PANEL_DIR="/opt/kighmu-panel"
 
 setup_colors() {
@@ -124,9 +124,10 @@ install_ssl_tls() {
     else
         apt-get install -y -qq curl 2>/dev/null
         local url="https://github.com/kinf744/Kighmu/releases/download/v1.0.0/ssl_tls"
-        local tmp; tmp=$(mktemp -d); cd "$tmp"
+        local tmp; tmp=$(mktemp -d)
+        pushd "$tmp" >/dev/null || return 1
         curl -fsSL "$url" -o ssl_tls 2>/dev/null && chmod +x ssl_tls && file ssl_tls | grep -q ELF
-        install -m 0755 ssl_tls /usr/local/bin/ssl_tls; rm -rf "$tmp"
+        install -m 0755 ssl_tls /usr/local/bin/ssl_tls; popd >/dev/null 2>&1 || true; rm -rf "$tmp"
     fi
 
     cat > /etc/systemd/system/ssl_tls.service << 'UNIT'
@@ -169,9 +170,10 @@ install_sshws() {
         fi
     else
         local url="https://github.com/kinf744/Kighmu/releases/download/v1.0.0"
-        local tmp; tmp=$(mktemp -d); cd "$tmp"
+        local tmp; tmp=$(mktemp -d)
+        pushd "$tmp" >/dev/null || return 1
         curl -LO "$url/sshws" 2>/dev/null && chmod +x sshws
-        install -m 0755 sshws /usr/local/bin/sshws; rm -rf "$tmp"
+        install -m 0755 sshws /usr/local/bin/sshws; popd >/dev/null 2>&1 || true; rm -rf "$tmp"
     fi
 
     cat > /etc/systemd/system/sshws.service << 'UNIT'
@@ -206,10 +208,12 @@ install_wstunnel() {
     echo "${CYAN}━━━ Installation wstunnel (port 2082 → 22) ━━━${RESET}"
     command -v wstunnel &>/dev/null && { warn "wstunnel déjà installé"; pause; return; }
     apt-get install -y -qq wget 2>/dev/null
+    local _cwd; _cwd=$(pwd)
     rm -rf /tmp/wstunnel_inst; mkdir -p /tmp/wstunnel_inst; cd /tmp/wstunnel_inst
     local url="https://github.com/erebe/wstunnel/releases/download/v10.5.1/wstunnel_10.5.1_linux_amd64.tar.gz"
     wget -q "$url" -O wstunnel.tar.gz 2>/dev/null
-    tar -xzf wstunnel.tar.gz >/dev/null 2>&1; chmod +x wstunnel; mv wstunnel /usr/local/bin/wstunnel; rm -rf /tmp/wstunnel_inst
+    tar -xzf wstunnel.tar.gz >/dev/null 2>&1; chmod +x wstunnel; mv wstunnel /usr/local/bin/wstunnel
+    cd "$_cwd" 2>/dev/null || cd /; rm -rf /tmp/wstunnel_inst
 
     cat > /usr/local/bin/proxy--ws << 'PROXYEOF'
 #!/usr/bin/env bash
@@ -903,6 +907,7 @@ UNIT
         systemctl daemon-reload && systemctl enable --now "${svc}.service" 2>/dev/null || true
     done
 
+    mkdir -p /etc/dnsdist
     cat > /etc/dnsdist/dnsdist.conf << DNSDEOF
 setSecurityPollSuffix("")
 setACL({"0.0.0.0/0","::/0"})

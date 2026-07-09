@@ -1,7 +1,7 @@
 #!/bin/bash
 # Kighmu - Xray & V2Ray
 # VMess, VLESS, Trojan, Shadowsocks + V2Ray TCP
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PANEL_DIR="/opt/kighmu-panel"
 DB_NAME="kighmu_panel"
 DB_USER="kighmu_user"
@@ -223,16 +223,19 @@ install_xray() {
     apt-get install -y -qq nginx haproxy curl socat xz-utils wget unzip jq ca-certificates lsof 2>/dev/null
     systemctl stop nginx haproxy xray 2>/dev/null || true
 
+    mkdir -p /etc/xray
     echo "$DOMAIN" > "$XRAY_DOMAIN"
 
     # Xray binary
     local VER="26.1.23"
+    local _cwd; _cwd=$(pwd)
     rm -rf /tmp/xray_inst; mkdir -p /tmp/xray_inst; cd /tmp/xray_inst
     curl -L -o xray.zip "https://github.com/XTLS/Xray-core/releases/download/v${VER}/xray-linux-64.zip" 2>/dev/null || \
         curl -L -o xray.zip "https://github.com/XTLS/Xray-core/releases/latest/download/xray-linux-64.zip" 2>/dev/null
     unzip -o xray.zip >/dev/null 2>&1; mv -f xray "$XRAY_BIN"; chmod +x "$XRAY_BIN"
     setcap 'cap_net_bind_service=+ep' "$XRAY_BIN" 2>/dev/null || true
-    mkdir -p "$XRAY_LOG" /etc/xray; touch "$XRAY_LOG/access.log" "$XRAY_LOG/error.log"
+    mkdir -p "$XRAY_LOG"; touch "$XRAY_LOG/access.log" "$XRAY_LOG/error.log"
+    cd "$_cwd" 2>/dev/null || cd /; rm -rf /tmp/xray_inst
 
     # TLS cert
     if [[ "$DOMAIN" != "$IP" ]] && [[ "$DOMAIN" =~ \. ]]; then
@@ -435,6 +438,7 @@ xray_diagnostic() {
 
 xray_repair_binary() {
     info "Mise à jour du binaire Xray..."
+    local _cwd; _cwd=$(pwd)
     rm -rf /tmp/xray_rep; mkdir -p /tmp/xray_rep; cd /tmp/xray_rep
     curl -L -o xray.zip "https://github.com/XTLS/Xray-core/releases/latest/download/xray-linux-64.zip" 2>/dev/null
     if [[ -f xray.zip ]]; then
@@ -443,7 +447,7 @@ xray_repair_binary() {
             log "Binaire mis à jour : $("$XRAY_BIN" version 2>/dev/null | head -1)"
         else err "Extraction échouée"; fi
     else err "Téléchargement échoué"; fi
-    rm -rf /tmp/xray_rep
+    cd "$_cwd" 2>/dev/null || cd /; rm -rf /tmp/xray_rep
 }
 
 xray_repair_config() {

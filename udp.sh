@@ -1,7 +1,7 @@
 #!/bin/bash
 # Kighmu - Tunnels UDP
 # ZIVPN, Hysteria v1, BadVPN, UDP Custom
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PANEL_DIR="/opt/kighmu-panel"
 DB_NAME="kighmu_panel"
 DB_USER="kighmu_user"

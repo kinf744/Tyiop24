@@ -1,6 +1,6 @@
 #!/bin/bash
 # Kighmu Panel - Auto-Installation Commercial 4-en-1
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PANEL_DIR="/opt/kighmu-panel"
 KIGHMU_DIR="/root/Kighmu-v2"
 DB_NAME="kighmu_panel"
@@ -60,6 +60,11 @@ show_banner() {
 
 # ── Page NS (Nameserver) ──
 ask_nameservers() {
+    if [[ -n "${AUTO_NS4:-}" || -n "${AUTO_NV4:-}" ]]; then
+        NS4="${AUTO_NS4:-ns4.kingom.ggff.net}"
+        NV4="${AUTO_NV4:-nv4.kingom.ggff.net}"
+        return
+    fi
     clear
     echo -e "${CLR}${BG}"
     echo -e "${BG}${CYAN}╔═══$(printf '═%.0s' {1..67})═══╗${RESET}"
@@ -247,7 +252,10 @@ install_npm_panel() {
 create_admin_user() {
     step_header '👤  Administrateur Panel  👤'
     local user pass
-    if [[ -z "${SKIP_PAUSE:-}" ]]; then
+    if [[ -n "${AUTO_USER:-}" && -n "${AUTO_PASS:-}" ]]; then
+        user="$AUTO_USER"
+        pass="$AUTO_PASS"
+    elif [[ -z "${SKIP_PAUSE:-}" ]]; then
         echo -e "${BG}  ${LAV}Création du compte administrateur pour le Panel Web${RESET}"
         echo
         echo -ne "${BG}${WHITE}  Nom d'utilisateur [${CYAN}admin${WHITE}] : ${RESET}"; read -r user
@@ -258,6 +266,7 @@ create_admin_user() {
         user="admin"
         pass=$(gen_pass 12)
     fi
+    pushd "$PANEL_DIR" >/dev/null || return 1
     node -e "
     const mysql = require('mysql2/promise');
     const bcrypt = require('bcryptjs');
@@ -267,7 +276,8 @@ create_admin_user() {
         await conn.execute('INSERT INTO admins (username, password) VALUES (?,?) ON DUPLICATE KEY UPDATE password=VALUES(password)', ['$user', hash]);
         await conn.end();
     })();
-    " 2>/dev/null || warn "Admin SQL — vérifie MySQL"
+    " 2>&1 || warn "Admin SQL — consultez /tmp/admin-node.log (stderr ci-dessus)"
+    popd >/dev/null 2>&1 || true
     echo
     echo -e "${BG}${CYAN}╔═══$(printf '═%.0s' {1..57})═══╗${RESET}"
     echo -e "${BG}${CYAN}║${RESET}${TITLE_BG}$(center '🔐  ACCÈS PANEL ADMIN  🔐' 61)${RESET}${BG}${CYAN}║${RESET}"
@@ -285,8 +295,12 @@ create_admin_user() {
 configure_nginx() {
     step_header '🌍  Nginx  🌍'
     local IP; IP=$(hostname -I | awk '{print $1}')
-    echo -e "${BG}  ${LAV}Domaine/IP pour le panel [${CYAN}$IP${LAV}]${RESET}"
-    echo -ne "${BG}${WHITE}  » ${RESET}"; read -r DOMAIN; DOMAIN=${DOMAIN:-$IP}
+    if [[ -n "${AUTO_DOMAIN:-}" ]]; then
+        DOMAIN="$AUTO_DOMAIN"
+    else
+        echo -e "${BG}  ${LAV}Domaine/IP pour le panel [${CYAN}$IP${LAV}]${RESET}"
+        echo -ne "${BG}${WHITE}  » ${RESET}"; read -r DOMAIN; DOMAIN=${DOMAIN:-$IP}
+    fi
     mkdir -p /etc/kighmu /etc/nginx/sites-available /etc/nginx/sites-enabled
     echo "$DOMAIN" > /etc/kighmu/domain.txt 2>/dev/null || true
     systemctl stop nginx 2>/dev/null || true
@@ -948,6 +962,10 @@ main_menu() {
 }
 
 check_root
+if [[ -n "${AUTO_INSTALL:-}" ]]; then
+    full_install
+    exit 0
+fi
 main_menu
 
 # PANEL_CODE_START
