@@ -475,6 +475,11 @@ NGXEOF
     nginx -t 2>/dev/null && systemctl start nginx && log "Nginx OK" || err "Nginx invalide"
 }
 
+# ── Création dossiers de logs ──
+for _logdir in v2ray xray slowdns hysteria zivpn udp-custom; do
+    mkdir -p /var/log/$_logdir
+done
+
 # ── NFTABLES ──
 setup_nftables() {
     step_header '🛡️  nftables  🛡️'
