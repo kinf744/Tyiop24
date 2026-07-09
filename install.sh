@@ -285,8 +285,86 @@ configure_nginx() {
     echo "$DOMAIN" > /etc/kighmu/domain.txt 2>/dev/null || true
     systemctl stop nginx 2>/dev/null || true
     rm -f /etc/nginx/sites-enabled/default 2>/dev/null || true
-    cat > /etc/nginx/sites-available/kighmu << 'NGXEOF'
-# Panel — HTTP (port 8585)
+
+    if [[ "$DOMAIN" =~ \. ]] && ! [[ "$DOMAIN" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        # ── Domaine réel → HTTPS avec acme.sh (comme install_xray) ──
+        if ! command -v ~/.acme.sh/acme.sh &>/dev/null; then
+            curl -fsSL https://get.acme.sh | bash 2>/dev/null || true
+        fi
+        mkdir -p /var/www/html/.well-known/acme-challenge
+        cat > /etc/nginx/conf.d/acme-challenge.conf << 'ACME'
+server {
+    listen 80; listen [::]:80;
+    server_name _;
+    root /var/www/html;
+    location /.well-known/acme-challenge/ { allow all; }
+    location / { return 404; }
+}
+ACME
+        systemctl start nginx 2>/dev/null || true
+        local ACME_SH; ACME_SH=$(ls ~/.acme.sh/acme.sh 2>/dev/null || echo "/root/.acme.sh/acme.sh")
+        "$ACME_SH" --issue --webroot /var/www/html -d "$DOMAIN" --keylength ec-256 2>/dev/null || true
+        rm -f /etc/nginx/conf.d/acme-challenge.conf
+        if [[ -f ~/.acme.sh/"${DOMAIN}"_ecc/fullchain.cer ]]; then
+            log "Certificat SSL obtenu pour $DOMAIN (acme.sh)"
+            cat > /etc/nginx/sites-available/kighmu << 'NGXEOF'
+server {
+    listen 8585;
+    server_name _;
+    return 301 https://$host:8587$request_uri;
+}
+
+server {
+    listen 8587 ssl http2;
+    server_name SSL_DOMAIN;
+    client_max_body_size 32m;
+
+    ssl_certificate     /root/.acme.sh/SSL_DOMAIN_ecc/fullchain.cer;
+    ssl_certificate_key /root/.acme.sh/SSL_DOMAIN_ecc/SSL_DOMAIN.key;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256;
+    ssl_prefer_server_ciphers on;
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_read_timeout 86400;
+    }
+
+    location /ws-dropbear {
+        proxy_pass http://127.0.0.1:2095;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_read_timeout 86400;
+    }
+
+    location /ws-stunnel {
+        proxy_pass http://127.0.0.1:700;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_read_timeout 86400;
+    }
+}
+NGXEOF
+            sed -i "s/SSL_DOMAIN/$DOMAIN/g" /etc/nginx/sites-available/kighmu
+            "$ACME_SH" --installcert -d "$DOMAIN" --ecc \
+                --key-file /root/.acme.sh/"${DOMAIN}"_ecc/"${DOMAIN}".key \
+                --fullchain-file /root/.acme.sh/"${DOMAIN}"_ecc/fullchain.cer \
+                --reloadcmd "systemctl reload nginx" 2>/dev/null || true
+        else
+            warn "acme.sh a échoué pour $DOMAIN — fallback HTTP"
+            cat > /etc/nginx/sites-available/kighmu << 'NGXEOF'
 server {
     listen 8585;
     server_name _;
@@ -324,37 +402,14 @@ server {
     }
 }
 NGXEOF
-    ln -sf /etc/nginx/sites-available/kighmu /etc/nginx/sites-enabled/
-    nginx -t 2>/dev/null && systemctl start nginx && log "Nginx OK (port 8585)" || err "Nginx invalide"
-    if [[ "$DOMAIN" =~ \. ]] && ! [[ "$DOMAIN" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-        DEBIAN_FRONTEND=noninteractive apt-get install -y -qq certbot 2>/dev/null
-        mkdir -p /etc/letsencrypt/renewal-hooks/pre /etc/letsencrypt/renewal-hooks/post
-        cat > /etc/letsencrypt/renewal-hooks/pre/sshws-stop.sh << 'HOOK'
-#!/bin/bash
-systemctl stop sshws 2>/dev/null || true
-sleep 1
-HOOK
-        cat > /etc/letsencrypt/renewal-hooks/post/sshws-start.sh << 'HOOK'
-#!/bin/bash
-systemctl start sshws 2>/dev/null || true
-HOOK
-        chmod +x /etc/letsencrypt/renewal-hooks/pre/sshws-stop.sh /etc/letsencrypt/renewal-hooks/post/sshws-start.sh
-        systemctl stop sshws 2>/dev/null || true
-        if certbot certonly --standalone --preferred-challenges http -d "$DOMAIN" --non-interactive --agree-tos -m "admin@$DOMAIN" 2>/dev/null; then
-            log "Certificat SSL obtenu pour $DOMAIN"
-            cat >> /etc/nginx/sites-available/kighmu << 'HTTPSEOF'
-
-# HTTPS (port 8587 + 446)
+        fi
+    else
+        # ── IP uniquement → HTTP direct ──
+        cat > /etc/nginx/sites-available/kighmu << 'NGXEOF'
 server {
-    listen 8587 ssl http2;
-    listen 446 ssl http2;
-    server_name SSL_DOMAIN;
+    listen 8585;
+    server_name _;
     client_max_body_size 32m;
-
-    ssl_certificate /etc/letsencrypt/live/SSL_DOMAIN/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/SSL_DOMAIN/privkey.pem;
-    include /etc/letsencrypt/options-ssl-nginx.conf;
-    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
 
     location / {
         proxy_pass http://127.0.0.1:3000;
@@ -387,14 +442,10 @@ server {
         proxy_read_timeout 86400;
     }
 }
-HTTPSEOF
-            sed -i "s/SSL_DOMAIN/$DOMAIN/g" /etc/nginx/sites-available/kighmu
-            nginx -t 2>/dev/null && systemctl reload nginx || true
-        else
-            warn "Certbot a échoué pour $DOMAIN (vérifiez que le DNS pointe ici)"
-        fi
-        systemctl start sshws 2>/dev/null || true
+NGXEOF
     fi
+    ln -sf /etc/nginx/sites-available/kighmu /etc/nginx/sites-enabled/
+    nginx -t 2>/dev/null && systemctl start nginx && log "Nginx OK" || err "Nginx invalide"
 }
 
 # ── NFTABLES ──
