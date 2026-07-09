@@ -313,27 +313,23 @@ configure_nginx() {
     rm -f /etc/nginx/sites-enabled/default 2>/dev/null || true
 
     if [[ "$DOMAIN" =~ \. ]] && ! [[ "$DOMAIN" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-        # ── Domaine réel → HTTPS avec acme.sh (comme install_xray) ──
+        # ── Domaine réel → HTTPS avec acme.sh ──
         if ! command -v ~/.acme.sh/acme.sh &>/dev/null; then
             curl -fsSL https://get.acme.sh | bash 2>/dev/null || true
         fi
-        mkdir -p /var/www/html/.well-known/acme-challenge
-        cat > /etc/nginx/conf.d/acme-challenge.conf << 'ACME'
-server {
-    listen 80; listen [::]:80;
-    server_name _;
-    root /var/www/html;
-    location /.well-known/acme-challenge/ { allow all; }
-    location / { return 404; }
-}
-ACME
-        systemctl start nginx 2>/dev/null || true
+        # sshws bloque le port 80 → on l'arrête temporairement
+        systemctl stop sshws 2>/dev/null || true
         local ACME_SH; ACME_SH=$(ls ~/.acme.sh/acme.sh 2>/dev/null || echo "/root/.acme.sh/acme.sh")
         "$ACME_SH" --register-account -m admin@"$DOMAIN" 2>/dev/null || true
-        "$ACME_SH" --issue --webroot /var/www/html -d "$DOMAIN" --keylength ec-256 --force 2>/dev/null || "$ACME_SH" --issue --webroot /var/www/html -d "$DOMAIN" --keylength ec-256 --server letsencrypt 2>/dev/null || true
-        rm -f /etc/nginx/conf.d/acme-challenge.conf
+        "$ACME_SH" --issue --standalone -d "$DOMAIN" --keylength ec-256 --force 2>/dev/null \
+            || "$ACME_SH" --issue --standalone -d "$DOMAIN" --keylength ec-256 --server letsencrypt 2>/dev/null || true
         if [[ -f ~/.acme.sh/"${DOMAIN}"_ecc/fullchain.cer ]]; then
             log "Certificat SSL obtenu pour $DOMAIN (acme.sh)"
+            mkdir -p /etc/nginx/ssl
+            "$ACME_SH" --installcert -d "$DOMAIN" --ecc \
+                --key-file /etc/nginx/ssl/"${DOMAIN}".key \
+                --fullchain-file /etc/nginx/ssl/"${DOMAIN}".crt \
+                --reloadcmd "systemctl reload nginx" 2>/dev/null || true
             cat > /etc/nginx/sites-available/kighmu << 'NGXEOF'
 server {
     listen 8585;
@@ -346,8 +342,8 @@ server {
     server_name SSL_DOMAIN;
     client_max_body_size 32m;
 
-    ssl_certificate     /root/.acme.sh/SSL_DOMAIN_ecc/fullchain.cer;
-    ssl_certificate_key /root/.acme.sh/SSL_DOMAIN_ecc/SSL_DOMAIN.key;
+    ssl_certificate     /etc/nginx/ssl/SSL_DOMAIN.crt;
+    ssl_certificate_key /etc/nginx/ssl/SSL_DOMAIN.key;
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256;
     ssl_prefer_server_ciphers on;
@@ -385,13 +381,46 @@ server {
 }
 NGXEOF
             sed -i "s/SSL_DOMAIN/$DOMAIN/g" /etc/nginx/sites-available/kighmu
-            "$ACME_SH" --installcert -d "$DOMAIN" --ecc \
-                --key-file /root/.acme.sh/"${DOMAIN}"_ecc/"${DOMAIN}".key \
-                --fullchain-file /root/.acme.sh/"${DOMAIN}"_ecc/fullchain.cer \
-                --reloadcmd "systemctl reload nginx" 2>/dev/null || true
         else
             warn "acme.sh a échoué pour $DOMAIN — fallback HTTP"
             cat > /etc/nginx/sites-available/kighmu << 'NGXEOF'
+    server {
+    listen 8585;
+    server_name _;
+    client_max_body_size 32m;
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_read_timeout 86400;
+    }
+
+    location /ws-dropbear {
+        proxy_pass http://127.0.0.1:2095;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_read_timeout 86400;
+    }
+
+    location /ws-stunnel {
+        proxy_pass http://127.0.0.1:700;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_read_timeout 86400;
+    }
+}
+NGXEOF
 server {
     listen 8585;
     server_name _;
