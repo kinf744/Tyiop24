@@ -95,11 +95,13 @@ install_system_deps() {
         build-essential cmake python3 python3-pip \
         git nginx mysql-server 2>/dev/null
     # Réparation si fichiers de base supprimés par une désinstallation incomplète
+    [[ ! -f /etc/nginx/mime.types ]] && apt-get install --reinstall -y -qq nginx-common 2>/dev/null || true
     if [[ ! -f /etc/nginx/nginx.conf ]]; then
         rm -f /etc/systemd/system/nginx.service.d/override.conf 2>/dev/null || true
         rm -f /etc/nginx/sites-enabled/* /etc/nginx/conf.d/* 2>/dev/null || true
         mkdir -p /etc/nginx/sites-available /etc/nginx/sites-enabled /etc/nginx/conf.d
-        cat > /etc/nginx/nginx.conf << 'NGXCONF'
+        if [[ -f /etc/nginx/mime.types ]]; then
+            cat > /etc/nginx/nginx.conf << 'NGXCONF'
 user www-data;
 worker_processes auto;
 pid /run/nginx.pid;
@@ -116,7 +118,7 @@ http {
     include /etc/nginx/sites-enabled/*;
 }
 NGXCONF
-        [[ ! -f /etc/nginx/mime.types ]] && apt-get install --reinstall -y -qq nginx-common 2>/dev/null || true
+        fi
     fi
     if [[ ! -f /etc/mysql/my.cnf ]]; then
         apt-get install --reinstall -y -qq mysql-server 2>/dev/null || true
@@ -148,13 +150,17 @@ install_mysql() {
     systemctl start mysql 2>/dev/null || true
     systemctl enable mysql 2>/dev/null || true
 
-    DB_PASS=$(grep '^DB_PASSWORD=' "$PANEL_DIR/.env" 2>/dev/null | cut -d= -f2 || gen_pass 24)
-    JWT_SECRET=$(grep '^JWT_SECRET=' "$PANEL_DIR/.env" 2>/dev/null | cut -d= -f2 || openssl rand -base64 64 | tr -d '=/+\n' | head -c 72)
-    REPORT_SECRET=$(grep '^REPORT_SECRET=' "$PANEL_DIR/.env" 2>/dev/null | cut -d= -f2 || gen_pass 40)
+    DB_PASS=$(grep '^DB_PASSWORD=' "$PANEL_DIR/.env" 2>/dev/null | cut -d= -f2)
+    DB_PASS=${DB_PASS:-$(gen_pass 24)}
+    JWT_SECRET=$(grep '^JWT_SECRET=' "$PANEL_DIR/.env" 2>/dev/null | cut -d= -f2)
+    JWT_SECRET=${JWT_SECRET:-$(openssl rand -base64 64 | tr -d '=/+\n' | head -c 72)}
+    REPORT_SECRET=$(grep '^REPORT_SECRET=' "$PANEL_DIR/.env" 2>/dev/null | cut -d= -f2)
+    REPORT_SECRET=${REPORT_SECRET:-$(gen_pass 40)}
 
     mysql -e "CREATE DATABASE IF NOT EXISTS ${DB_NAME} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" 2>/dev/null
-    mysql -e "CREATE USER IF NOT EXISTS '${DB_USER}'@'localhost' IDENTIFIED BY '${DB_PASS}';" 2>/dev/null
-    mysql -e "GRANT ALL PRIVILEGES ON ${DB_NAME}.* TO '${DB_USER}'@'localhost'; FLUSH PRIVILEGES;" 2>/dev/null
+    mysql -e "CREATE USER IF NOT EXISTS '${DB_USER}'@'localhost' IDENTIFIED WITH mysql_native_password BY '${DB_PASS}';" 2>/dev/null
+    mysql -e "CREATE USER IF NOT EXISTS '${DB_USER}'@'127.0.0.1' IDENTIFIED WITH mysql_native_password BY '${DB_PASS}';" 2>/dev/null
+    mysql -e "GRANT ALL PRIVILEGES ON ${DB_NAME}.* TO '${DB_USER}'@'localhost'; GRANT ALL PRIVILEGES ON ${DB_NAME}.* TO '${DB_USER}'@'127.0.0.1'; FLUSH PRIVILEGES;" 2>/dev/null
 
     local GH="https://raw.githubusercontent.com/kinf744/Tyiop24/main"
     if [[ -f "$PANEL_DIR/schema.sql" ]]; then
