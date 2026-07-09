@@ -163,9 +163,15 @@ install_mysql() {
     REPORT_SECRET=${REPORT_SECRET:-$(gen_pass 40)}
 
     mysql -e "CREATE DATABASE IF NOT EXISTS ${DB_NAME} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" 2>/dev/null
-    mysql -e "CREATE USER IF NOT EXISTS '${DB_USER}'@'localhost' IDENTIFIED WITH mysql_native_password BY '${DB_PASS}';" 2>/dev/null
-    mysql -e "CREATE USER IF NOT EXISTS '${DB_USER}'@'127.0.0.1' IDENTIFIED WITH mysql_native_password BY '${DB_PASS}';" 2>/dev/null
-    mysql -e "GRANT ALL PRIVILEGES ON ${DB_NAME}.* TO '${DB_USER}'@'localhost'; GRANT ALL PRIVILEGES ON ${DB_NAME}.* TO '${DB_USER}'@'127.0.0.1'; FLUSH PRIVILEGES;" 2>/dev/null
+    mysql -e "
+        CREATE USER IF NOT EXISTS '${DB_USER}'@'localhost' IDENTIFIED WITH mysql_native_password BY '${DB_PASS}';
+        CREATE USER IF NOT EXISTS '${DB_USER}'@'127.0.0.1' IDENTIFIED WITH mysql_native_password BY '${DB_PASS}';
+        ALTER USER '${DB_USER}'@'localhost' IDENTIFIED WITH mysql_native_password BY '${DB_PASS}';
+        ALTER USER '${DB_USER}'@'127.0.0.1' IDENTIFIED WITH mysql_native_password BY '${DB_PASS}';
+        GRANT ALL PRIVILEGES ON ${DB_NAME}.* TO '${DB_USER}'@'localhost';
+        GRANT ALL PRIVILEGES ON ${DB_NAME}.* TO '${DB_USER}'@'127.0.0.1';
+        FLUSH PRIVILEGES;
+    " 2>/dev/null
 
     local GH="https://raw.githubusercontent.com/kinf744/Tyiop24/main"
     if [[ -f "$PANEL_DIR/schema.sql" ]]; then
@@ -271,12 +277,12 @@ create_admin_user() {
     const mysql = require('mysql2/promise');
     const bcrypt = require('bcryptjs');
     (async () => {
-        const conn = await mysql.createConnection({ host:'127.0.0.1', user:'${DB_USER}', password:'${DB_PASS}', database:'${DB_NAME}' });
+        const conn = await mysql.createConnection({ host:'127.0.0.1', port:3306, user:'${DB_USER}', password:'${DB_PASS}', database:'${DB_NAME}' });
         const hash = await bcrypt.hash('$pass', 12);
         await conn.execute('INSERT INTO admins (username, password) VALUES (?,?) ON DUPLICATE KEY UPDATE password=VALUES(password)', ['$user', hash]);
         await conn.end();
     })();
-    " 2>&1 || warn "Admin SQL — consultez /tmp/admin-node.log (stderr ci-dessus)"
+    " 2>&1 || warn "Admin SQL — vérifie MySQL"
     popd >/dev/null 2>&1 || true
     echo
     echo -e "${BG}${CYAN}╔═══$(printf '═%.0s' {1..57})═══╗${RESET}"
@@ -323,7 +329,8 @@ server {
 ACME
         systemctl start nginx 2>/dev/null || true
         local ACME_SH; ACME_SH=$(ls ~/.acme.sh/acme.sh 2>/dev/null || echo "/root/.acme.sh/acme.sh")
-        "$ACME_SH" --issue --webroot /var/www/html -d "$DOMAIN" --keylength ec-256 2>/dev/null || true
+        "$ACME_SH" --register-account -m admin@"$DOMAIN" 2>/dev/null || true
+        "$ACME_SH" --issue --webroot /var/www/html -d "$DOMAIN" --keylength ec-256 --force 2>/dev/null || "$ACME_SH" --issue --webroot /var/www/html -d "$DOMAIN" --keylength ec-256 --server letsencrypt 2>/dev/null || true
         rm -f /etc/nginx/conf.d/acme-challenge.conf
         if [[ -f ~/.acme.sh/"${DOMAIN}"_ecc/fullchain.cer ]]; then
             log "Certificat SSL obtenu pour $DOMAIN (acme.sh)"
@@ -497,6 +504,17 @@ systemctl daemon-reload 2>/dev/null || true
 INITEOF
     chmod +x /usr/local/bin/init-nftables.sh
     bash /usr/local/bin/init-nftables.sh
+    cat > /usr/local/bin/init-nftables-kighmu.sh << 'KGHM'
+#!/bin/bash
+if ! nft list table inet kighmu 2>/dev/null | grep -q .; then
+    nft add table inet kighmu
+    nft 'add chain inet kighmu input   { type filter hook input priority 0; policy accept; }'
+    nft 'add chain inet kighmu output  { type filter hook output priority 0; policy accept; }'
+    nft 'add chain inet kighmu forward { type filter hook forward priority 0; policy accept; }'
+fi
+KGHM
+    chmod +x /usr/local/bin/init-nftables-kighmu.sh
+    bash /usr/local/bin/init-nftables-kighmu.sh
     cat > /etc/nftables/kighmu-panel.nft << 'PNLEOF'
 table inet kighmu-panel {
     chain input {

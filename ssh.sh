@@ -842,8 +842,31 @@ uninstall_ws_services() {
 # ================================================
 install_slowdns() {
     echo "${CYAN}━━━ Installation SlowDNS (53→5300→5353/5354) ━━━${RESET}"
+
+    # ── dnsdist toujours configuré ──
+    apt-get install -y -qq dnsdist 2>/dev/null || true
+    local NS4_cfg="" NV4_cfg=""
+    NS4_cfg=$(head -1 /etc/slowdns/ns.conf 2>/dev/null || echo "")
+    NV4_cfg=$(head -1 /etc/slowdns/nv4/ns.conf 2>/dev/null || echo "")
+    [[ -z "$NS4_cfg" ]] && NS4_cfg="${AUTO_NS4:-ns4.kingom.ggff.net}"
+    [[ -z "$NV4_cfg" ]] && NV4_cfg="${AUTO_NV4:-nv4.kingom.ggff.net}"
+    mkdir -p /etc/dnsdist
+    cat > /etc/dnsdist/dnsdist.conf << DNSDEOF
+setSecurityPollSuffix("")
+setACL({"0.0.0.0/0","::/0"})
+addLocal("0.0.0.0:5300")
+newServer({address="127.0.0.1:5353",pool="ns4"})
+newServer({address="127.0.0.1:5354",pool="nv4"})
+addAction(makeRule("${NS4_cfg}."), PoolAction("ns4"))
+addAction(makeRule("${NV4_cfg}."), PoolAction("nv4"))
+addAction(AllRule(), RCodeAction(5))
+DNSDEOF
+    mkdir -p /etc/systemd/system/dnsdist.service.d
+    printf '[Service]\nRestart=always\n' > /etc/systemd/system/dnsdist.service.d/restart.conf
+    systemctl daemon-reload; systemctl enable --now dnsdist 2>/dev/null || true
+
     command -v dnstt-server &>/dev/null && { warn "SlowDNS déjà installé"; pause; return; }
-    apt-get install -y -qq curl jq dnsdist wget 2>/dev/null
+    apt-get install -y -qq curl jq wget 2>/dev/null
 
     local DIR="/etc/slowdns"; mkdir -p "$DIR/ns4" "$DIR/nv4" /var/log/slowdns
     local PUB_KEY; PUB_KEY=$(curl -s ipv4.icanhazip.com 2>/dev/null || hostname -I | awk '{print $1}')
@@ -906,21 +929,6 @@ WantedBy=multi-user.target
 UNIT
         systemctl daemon-reload && systemctl enable --now "${svc}.service" 2>/dev/null || true
     done
-
-    mkdir -p /etc/dnsdist
-    cat > /etc/dnsdist/dnsdist.conf << DNSDEOF
-setSecurityPollSuffix("")
-setACL({"0.0.0.0/0","::/0"})
-addLocal("0.0.0.0:5300")
-newServer({address="127.0.0.1:5353",pool="ns4"})
-newServer({address="127.0.0.1:5354",pool="nv4"})
-addAction(makeRule("$NS4."), PoolAction("ns4"))
-addAction(makeRule("$NV4."), PoolAction("nv4"))
-addAction(AllRule(), RCodeAction(5))
-DNSDEOF
-    mkdir -p /etc/systemd/system/dnsdist.service.d
-    printf '[Service]\nRestart=always\n' > /etc/systemd/system/dnsdist.service.d/restart.conf
-    systemctl daemon-reload; systemctl restart dnsdist 2>/dev/null || true
 
     deploy_nft_tunnel slowdns 'table inet slowdns { chain prerouting { type nat hook prerouting priority -100; udp dport 53 redirect to :5300; tcp dport 53 redirect to :5300; }; chain input { type filter hook input priority 0; policy accept; udp dport 53 accept; udp dport 5300 accept; udp dport 5353 accept; udp dport 5354 accept; tcp dport 109 accept; tcp dport 5401 accept; }; }'
 
