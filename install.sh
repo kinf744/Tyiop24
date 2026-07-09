@@ -850,7 +850,7 @@ main_menu() {
         echo -ne "${BG}${LAV}  Choix »${RESET} ${WHITE}"; read -r CHOIX; echo -e "${RESET}"
         case $CHOIX in
             1) full_install ;;
-            2) install_system_deps; install_nodejs; install_mysql; deploy_panel_files; configure_env; install_npm_panel; create_admin_user; configure_nginx; setup_nftables; pause ;;
+            2) install_system_deps; install_nodejs; deploy_panel_files; configure_env; install_mysql; install_npm_panel; create_admin_user; configure_nginx; setup_nftables; pause ;;
             3) show_status ;;
             4) bash "$SCRIPT_DIR/udp.sh" ;;
             5) bash "$SCRIPT_DIR/xray-v2ray.sh" ;;
