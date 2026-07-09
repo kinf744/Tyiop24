@@ -1,7 +1,5 @@
 #!/bin/bash
 # Kighmu Panel - Auto-Installation Commercial 4-en-1
-set -uo pipefail
-
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PANEL_DIR="/opt/kighmu-panel"
 KIGHMU_DIR="/root/Kighmu-v2"
@@ -257,7 +255,7 @@ configure_nginx() {
     systemctl stop nginx 2>/dev/null || true
     rm -f /etc/nginx/sites-enabled/default 2>/dev/null || true
     cat > /etc/nginx/sites-available/kighmu << 'NGXEOF'
-# Panel — accès direct par IP (port 8585)
+# Panel — HTTP (port 8585)
 server {
     listen 8585;
     server_name _;
@@ -294,16 +292,36 @@ server {
         proxy_read_timeout 86400;
     }
 }
+NGXEOF
+    ln -sf /etc/nginx/sites-available/kighmu /etc/nginx/sites-enabled/
+    nginx -t 2>/dev/null && systemctl start nginx && log "Nginx OK (port 8585)" || err "Nginx invalide"
+    if [[ "$DOMAIN" =~ \. ]] && ! [[ "$DOMAIN" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        DEBIAN_FRONTEND=noninteractive apt-get install -y -qq certbot 2>/dev/null
+        mkdir -p /etc/letsencrypt/renewal-hooks/pre /etc/letsencrypt/renewal-hooks/post
+        cat > /etc/letsencrypt/renewal-hooks/pre/sshws-stop.sh << 'HOOK'
+#!/bin/bash
+systemctl stop sshws 2>/dev/null || true
+sleep 1
+HOOK
+        cat > /etc/letsencrypt/renewal-hooks/post/sshws-start.sh << 'HOOK'
+#!/bin/bash
+systemctl start sshws 2>/dev/null || true
+HOOK
+        chmod +x /etc/letsencrypt/renewal-hooks/pre/sshws-stop.sh /etc/letsencrypt/renewal-hooks/post/sshws-start.sh
+        systemctl stop sshws 2>/dev/null || true
+        if certbot certonly --standalone --preferred-challenges http -d "$DOMAIN" --non-interactive --agree-tos -m "admin@$DOMAIN" 2>/dev/null; then
+            log "Certificat SSL obtenu pour $DOMAIN"
+            cat >> /etc/nginx/sites-available/kighmu << 'HTTPSEOF'
 
-# HTTPS (port 8587 + 446) — DOMAIN_PLACEHOLDER
+# HTTPS (port 8587 + 446)
 server {
     listen 8587 ssl http2;
     listen 446 ssl http2;
-    server_name DOMAIN_PLACEHOLDER;
+    server_name SSL_DOMAIN;
     client_max_body_size 32m;
 
-    ssl_certificate /etc/letsencrypt/live/DOMAIN_PLACEHOLDER/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/DOMAIN_PLACEHOLDER/privkey.pem;
+    ssl_certificate /etc/letsencrypt/live/SSL_DOMAIN/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/SSL_DOMAIN/privkey.pem;
     include /etc/letsencrypt/options-ssl-nginx.conf;
     ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
 
@@ -338,28 +356,12 @@ server {
         proxy_read_timeout 86400;
     }
 }
-NGXEOF
-    sed -i "s/DOMAIN_PLACEHOLDER/$DOMAIN/g" /etc/nginx/sites-available/kighmu
-    ln -sf /etc/nginx/sites-available/kighmu /etc/nginx/sites-enabled/
-    nginx -t 2>/dev/null && systemctl start nginx && log "Nginx OK (port 8585)" || err "Nginx invalide"
-    if [[ "$DOMAIN" =~ \. ]] && ! [[ "$DOMAIN" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-        DEBIAN_FRONTEND=noninteractive apt-get install -y -qq certbot 2>/dev/null
-        # Le port 80 est utilisé par sshws — on utilise standalone avec hooks
-        mkdir -p /etc/letsencrypt/renewal-hooks/pre /etc/letsencrypt/renewal-hooks/post
-        cat > /etc/letsencrypt/renewal-hooks/pre/sshws-stop.sh << 'HOOK'
-#!/bin/bash
-systemctl stop sshws 2>/dev/null || true
-sleep 1
-HOOK
-        cat > /etc/letsencrypt/renewal-hooks/post/sshws-start.sh << 'HOOK'
-#!/bin/bash
-systemctl start sshws 2>/dev/null || true
-HOOK
-        chmod +x /etc/letsencrypt/renewal-hooks/pre/sshws-stop.sh /etc/letsencrypt/renewal-hooks/post/sshws-start.sh
-        systemctl stop sshws 2>/dev/null || true
-        certbot certonly --standalone --preferred-challenges http -d "$DOMAIN" --non-interactive --agree-tos -m "admin@$DOMAIN" 2>/dev/null && \
-            log "Certificat SSL obtenu pour $DOMAIN" || \
+HTTPSEOF
+            sed -i "s/SSL_DOMAIN/$DOMAIN/g" /etc/nginx/sites-available/kighmu
+            nginx -t 2>/dev/null && systemctl reload nginx || true
+        else
             warn "Certbot a échoué pour $DOMAIN (vérifiez que le DNS pointe ici)"
+        fi
         systemctl start sshws 2>/dev/null || true
     fi
 }
@@ -714,9 +716,9 @@ full_install() {
     ask_nameservers
     install_system_deps
     install_nodejs
-    install_mysql
     deploy_panel_files
     configure_env
+    install_mysql
     install_npm_panel
     create_admin_user
     configure_nginx
