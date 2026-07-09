@@ -98,7 +98,25 @@ install_system_deps() {
     if [[ ! -f /etc/nginx/nginx.conf ]]; then
         rm -f /etc/systemd/system/nginx.service.d/override.conf 2>/dev/null || true
         rm -f /etc/nginx/sites-enabled/* /etc/nginx/conf.d/* 2>/dev/null || true
-        apt-get install --reinstall -y -qq nginx 2>/dev/null || true
+        mkdir -p /etc/nginx/sites-available /etc/nginx/sites-enabled /etc/nginx/conf.d
+        cat > /etc/nginx/nginx.conf << 'NGXCONF'
+user www-data;
+worker_processes auto;
+pid /run/nginx.pid;
+include /etc/nginx/modules-enabled/*.conf;
+events { worker_connections 768; }
+http {
+    sendfile on; tcp_nopush on; tcp_nodelay on; keepalive_timeout 65;
+    types_hash_max_size 2048;
+    include /etc/nginx/mime.types; default_type application/octet-stream;
+    ssl_protocols TLSv1 TLSv1.1 TLSv1.2 TLSv1.3; ssl_prefer_server_ciphers on;
+    access_log /var/log/nginx/access.log; error_log /var/log/nginx/error.log;
+    gzip on;
+    include /etc/nginx/conf.d/*.conf;
+    include /etc/nginx/sites-enabled/*;
+}
+NGXCONF
+        [[ ! -f /etc/nginx/mime.types ]] && apt-get install --reinstall -y -qq nginx-common 2>/dev/null || true
     fi
     if [[ ! -f /etc/mysql/my.cnf ]]; then
         apt-get install --reinstall -y -qq mysql-server 2>/dev/null || true
