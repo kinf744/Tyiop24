@@ -94,10 +94,19 @@ install_system_deps() {
         cron bash-completion ca-certificates lsof \
         build-essential cmake python3 python3-pip \
         git nginx mysql-server 2>/dev/null
-    # Reinstall si les fichiers de base ont été supprimés (ex: désinstallation incomplète)
-    [[ ! -f /etc/nginx/nginx.conf ]] && apt-get install --reinstall -y -qq nginx 2>/dev/null
-    [[ ! -f /etc/mysql/my.cnf ]] && apt-get install --reinstall -y -qq mysql-server 2>/dev/null
-    [[ ! -f /etc/haproxy/haproxy.cfg ]] && apt-get install --reinstall -y -qq haproxy 2>/dev/null
+    # Réparation si fichiers de base supprimés par une désinstallation incomplète
+    if [[ ! -f /etc/nginx/nginx.conf ]]; then
+        rm -f /etc/systemd/system/nginx.service.d/override.conf 2>/dev/null || true
+        rm -f /etc/nginx/sites-enabled/* /etc/nginx/conf.d/* 2>/dev/null || true
+        apt-get install --reinstall -y -qq nginx 2>/dev/null || true
+    fi
+    if [[ ! -f /etc/mysql/my.cnf ]]; then
+        apt-get install --reinstall -y -qq mysql-server 2>/dev/null || true
+    fi
+    if [[ ! -f /etc/haproxy/haproxy.cfg ]]; then
+        rm -f /etc/systemd/system/haproxy.service.d/override.conf 2>/dev/null || true
+        apt-get install --reinstall -y -qq haproxy 2>/dev/null || true
+    fi
     log "Dépendances installées"
 }
 
@@ -2236,7 +2245,7 @@ menu_desinstalle() {
                     /etc/systemd/system/{xray,v2ray,nginx,haproxy,hysteria,zivpn,dropbear-custom,sshws,ssl_tls,proxy--ws,ws-dropbear,ws-stunnel,socks_python_ws,socks_python,udp-custom,badvpn@,slowdns-ns4,slowdns-nv4,dnsdist,bot2,kighmu-bandwidth,kighmu-panel,pm2-kighmu,kighmu-cleanup}.service \
                     /etc/systemd/system/nftables-tunnel@*.service \
                     /etc/systemd/system/mysql.service 2>/dev/null || true
-                rm -rf /etc/systemd/system/dnsdist.service.d 2>/dev/null || true
+                rm -rf /etc/systemd/system/dnsdist.service.d /etc/systemd/system/nginx.service.d /etc/systemd/system/haproxy.service.d 2>/dev/null || true
                 find /etc/systemd/system/ -name '*kighmu*' -o -name '*slowdns*' -o -name '*ws-*' -o -name '*socks*' -o -name '*badvpn*' -o -name '*udp-custom*' -o -name '*sshws*' -o -name '*cleanup*' 2>/dev/null | xargs rm -f 2>/dev/null || true
                 # Supprimer les symlinks dans multi-user.target.wants
                 find /etc/systemd/system/multi-user.target.wants/ -name '*kighmu*' -o -name '*xray*' -o -name '*v2ray*' -o -name '*slowdns*' -o -name '*badvpn*' -o -name '*sshws*' -o -name '*hysteria*' -o -name '*zivpn*' -o -name '*dropbear*' -o -name '*udp-custom*' -o -name '*nginx*' -o -name '*haproxy*' -o -name '*mysql*' -o -name '*cleanup*' 2>/dev/null | xargs rm -f 2>/dev/null || true
