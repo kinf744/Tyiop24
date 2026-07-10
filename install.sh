@@ -968,7 +968,12 @@ full_install() {
     echo -e "${BG}${CYAN}║${RESET}${TITLE_BG}$(center '✅  INSTALLATION TERMINÉE  ✅' 61)${RESET}${BG}${CYAN}║${RESET}"
     echo -e "${BG}${CYAN}╚═══$(printf '═%.0s' {1..57})═══╝${RESET}"
     echo
-    echo -e "${BG}  ${LAV}Panel Web:${RESET} ${CYAN}http://$(hostname -I | awk '{print $1}'):8585/admin/${RESET}"
+    local DOMAIN; DOMAIN=$(cat /etc/kighmu/domain.txt 2>/dev/null || echo "")
+    local IP; IP=$(hostname -I | awk '{print $1}')
+    echo -e "${BG}  ${LAV}Panel Web:${RESET} ${CYAN}http://${IP}:8585/admin/${RESET}"
+    if [[ -n "$DOMAIN" && "$DOMAIN" != "$IP" ]]; then
+        echo -e "${BG}  ${LAV}Panel SSL:${RESET} ${CYAN}https://${DOMAIN}/admin/${RESET}"
+    fi
     echo -e "${BG}  ${LAV}Log complet:${RESET} ${YELLOW}$INSTALL_LOG${RESET}"
     echo
     read -rp "  Nettoyer les fichiers d'installation ? (o/N): " C
