@@ -423,18 +423,21 @@ Wants=network-online.target
 StartLimitIntervalSec=0
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/udp-custom server -c /etc/udp-custom/config.json
+ExecStart=/usr/local/bin/udp-custom server -c /etc/udp-custom/config.json --exclude "53,5300,5353,5354,5667,6000-50000"
 WorkingDirectory=/etc/udp-custom
 Restart=always
 RestartSec=10
-AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_NET_RAW
+AmbientCapabilities=CAP_NET_BIND_SERVICE CAP_NET_RAW
 LimitNOFILE=1048576
 StandardOutput=append:/var/log/udp-custom.log
 StandardError=append:/var/log/udp-custom.log
 [Install]
 WantedBy=multi-user.target
 UNIT
-    systemctl daemon-reload && systemctl enable --now udp-custom 2>/dev/null || true
+    systemctl daemon-reload 2>/dev/null || true
+    # Vider les résidus iptables avant de démarrer (évite les conflits avec SlowDNS/ZIVPN/Hysteria)
+    iptables -t nat -F 2>/dev/null || true
+    systemctl enable --now udp-custom 2>/dev/null || true
     deploy_nft_tunnel udp-custom 'table inet udp-custom { chain input { type filter hook input priority 0; policy accept; udp dport 36712 accept; }; chain prerouting { type nat hook prerouting priority -100; udp dport != { 53, 5300, 5353, 5354, 5667, 6000-50000 } dnat to :36712; }; }'
     log "UDP Custom actif (port 36712, DNAT avec exclusions DNS/SlowDNS)"; pause
 }
@@ -443,6 +446,7 @@ uninstall_udp_custom() {
     read -rp "Confirmer ? (o/N): " C; [[ "$C" =~ ^[oO]$ ]] || return
     systemctl disable --now udp-custom 2>/dev/null || true; rm -f /etc/systemd/system/udp-custom.service
     rm -f /usr/local/bin/udp-custom; rm -rf /etc/udp-custom
+    iptables -t nat -F 2>/dev/null || true
     remove_nft_tunnel udp-custom; log "UDP Custom supprimé"; pause
 }
 
