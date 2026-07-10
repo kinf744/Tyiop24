@@ -912,9 +912,10 @@ full_install() {
         rm -f /usr/local/bin/$_bf 2>/dev/null || true
     done
     rm -f /usr/local/sbin/dropbear 2>/dev/null || true
-    for _sf in xray v2ray haproxy hysteria zivpn badvpn@ dropbear-custom sshws ssl_tls proxy--ws ws-dropbear ws-stunnel socks_python_ws socks_python udp-custom slowdns-ns4 slowdns-nv4 dnsdist bot2 kighmu-bandwidth kighmu-panel pm2-kighmu kighmu-cleanup; do
+    for _sf in xray v2ray haproxy hysteria zivpn badvpn@ dropbear-custom sshws ssl_tls proxy--ws ws-dropbear ws-stunnel socks_python_ws socks_python udp-custom slowdns-ns4 slowdns-nv4 dnsdist bot2 kighmu-bandwidth kighmu-panel pm2-kighmu kighmu-cleanup xray-watchdog; do
         rm -f /etc/systemd/system/${_sf}.service 2>/dev/null || true
     done
+    rm -f /etc/systemd/system/xray-watchdog.timer 2>/dev/null || true
     systemctl daemon-reload 2>/dev/null || true
     # Nettoyer les résidus iptables-nft qui peuvent casser les tunnels UDP
     iptables -t nat -F 2>/dev/null || true
@@ -2435,7 +2436,9 @@ menu_desinstalle() {
                     /usr/local/bin/v2ray \
                     /usr/local/bin/dnstt-server \
                     /usr/local/bin/hysteria \
+                    /usr/local/bin/hysteria-linux-amd64 \
                     /usr/local/bin/zivpn \
+                    /usr/local/bin/udp-zivpn-linux-amd64 \
                     /usr/local/bin/badvpn-udpgw \
                     /usr/local/bin/udp-custom \
                     /usr/local/bin/wstunnel \
@@ -2446,6 +2449,8 @@ menu_desinstalle() {
                     /usr/local/bin/ws-stunnel \
                     /usr/local/bin/init-nftables.sh \
                     /usr/local/bin/kighmu-bandwidth.sh \
+                    /usr/local/bin/slowdns-ns4-start \
+                    /usr/local/bin/slowdns-nv4-start \
                     /usr/local/bin/slowdns-ns4-start.sh \
                     /usr/local/bin/slowdns-nv4-start.sh \
                     /usr/local/bin/slowdns-watchdog.sh \
@@ -2453,18 +2458,24 @@ menu_desinstalle() {
                     /usr/local/bin/geoip.dat \
                     /usr/local/bin/geosite.dat \
                     /usr/local/bin/kighmu-panel.sh \
+                    /usr/local/bin/sshws \
+                    /usr/local/bin/ssl_tls \
+                    /usr/local/sbin/dropbear \
+                    /usr/local/bin/menu \
                     /root/Kighmu/bot2 2>/dev/null || true
 
                 # ── 3. Suppression fichiers systemd ──
                 echo -e "${BG}  ${ORANGE}[3/12]${RESET} ${LAV}Suppression des services systemd...${RESET}"
+                systemctl disable --now xray-watchdog.timer xray-watchdog.service 2>/dev/null || true
                 rm -f \
                     /etc/systemd/system/{xray,v2ray,nginx,haproxy,hysteria,zivpn,dropbear-custom,sshws,ssl_tls,proxy--ws,ws-dropbear,ws-stunnel,socks_python_ws,socks_python,udp-custom,badvpn@,slowdns-ns4,slowdns-nv4,dnsdist,bot2,kighmu-bandwidth,kighmu-panel,pm2-kighmu,kighmu-cleanup}.service \
+                    /etc/systemd/system/xray-watchdog.{service,timer} \
                     /etc/systemd/system/nftables-tunnel@*.service \
                     /etc/systemd/system/mysql.service 2>/dev/null || true
-                rm -rf /etc/systemd/system/dnsdist.service.d /etc/systemd/system/nginx.service.d /etc/systemd/system/haproxy.service.d 2>/dev/null || true
-                find /etc/systemd/system/ -name '*kighmu*' -o -name '*slowdns*' -o -name '*ws-*' -o -name '*socks*' -o -name '*badvpn*' -o -name '*udp-custom*' -o -name '*sshws*' -o -name '*cleanup*' 2>/dev/null | xargs rm -f 2>/dev/null || true
+                rm -rf /etc/systemd/system/{dnsdist,nginx,haproxy,mysql}.service.d 2>/dev/null || true
+                find /etc/systemd/system/ -maxdepth 1 \( -name '*kighmu*' -o -name '*slowdns*' -o -name '*ws-*' -o -name '*socks*' -o -name '*badvpn*' -o -name '*udp-custom*' -o -name '*sshws*' -o -name '*cleanup*' -o -name '*watchdog*' \) 2>/dev/null | xargs rm -f 2>/dev/null || true
                 # Supprimer les symlinks dans multi-user.target.wants
-                find /etc/systemd/system/multi-user.target.wants/ -name '*kighmu*' -o -name '*xray*' -o -name '*v2ray*' -o -name '*slowdns*' -o -name '*badvpn*' -o -name '*sshws*' -o -name '*hysteria*' -o -name '*zivpn*' -o -name '*dropbear*' -o -name '*udp-custom*' -o -name '*nginx*' -o -name '*haproxy*' -o -name '*mysql*' -o -name '*cleanup*' 2>/dev/null | xargs rm -f 2>/dev/null || true
+                find /etc/systemd/system/multi-user.target.wants/ -maxdepth 1 \( -name '*kighmu*' -o -name '*xray*' -o -name '*v2ray*' -o -name '*slowdns*' -o -name '*badvpn*' -o -name '*sshws*' -o -name '*hysteria*' -o -name '*zivpn*' -o -name '*dropbear*' -o -name '*udp-custom*' -o -name '*nginx*' -o -name '*haproxy*' -o -name '*mysql*' -o -name '*cleanup*' -o -name '*watchdog*' \) 2>/dev/null | xargs rm -f 2>/dev/null || true
 
                 # ── 4. Purge nftables + iptables ──
                 echo -e "${BG}  ${ORANGE}[4/12]${RESET} ${LAV}Purge nftables + iptables...${RESET}"
@@ -2514,6 +2525,7 @@ menu_desinstalle() {
                     /etc/sysctl.d/99-v2ray.conf \
                     /etc/sysctl.d/99-slowdns.conf \
                     /etc/logrotate.d/slowdns \
+                    /etc/logrotate.d/xray-watchdog \
                     /root/.kighmu_info 2>/dev/null || true
 
                 # ── 6. Suppression logs ──
@@ -2522,6 +2534,9 @@ menu_desinstalle() {
                     /var/log/xray /var/log/v2ray /var/log/slowdns \
                     /var/log/hysteria /var/log/zivpn /var/log/nginx \
                     /var/log/mysql /var/log/haproxy /var/log/stunnel4 \
+                    /var/log/kighmu-install.log /var/log/kighmu-traffic.log \
+                    /var/log/xray-watchdog.log /var/log/auto-clean.log \
+                    /var/log/kighmu-panel.log /var/log/bandwidth*.log \
                     /root/.pm2/logs 2>/dev/null || true
 
                 # ── 7. Suppression certificats SSL ──
@@ -2541,13 +2556,16 @@ menu_desinstalle() {
                 sed -i '/^Port /d' /etc/ssh/sshd_config 2>/dev/null || true
                 rm -f /etc/ssh/banner.txt 2>/dev/null || true
                 systemctl restart ssh 2>/dev/null || true
-                # Restaurer resolv.conf
-                crontab -r 2>/dev/null || true
+                # Restaurer resolv.conf (ne supprimer que les entrées kighmu)
                 chattr -i /etc/resolv.conf 2>/dev/null || true
-                echo "nameserver 1.1.1.1" > /etc/resolv.conf
-                chattr +i /etc/resolv.conf 2>/dev/null || true
+                sed -i '/kighmu/d' /etc/resolv.conf 2>/dev/null || true
+                if ! grep -q 'nameserver' /etc/resolv.conf 2>/dev/null; then
+                    echo "nameserver 1.1.1.1" >> /etc/resolv.conf
+                fi
+                # Nettoyer le crontab (lignes kighmu uniquement)
+                crontab -l 2>/dev/null | grep -vE 'kighmu|xray.watchdog|traffic.collect|auto-clean|cleanup' | crontab - 2>/dev/null || true
                 # Nettoyer sysctl
-                rm -f /etc/sysctl.d/99-*.conf 2>/dev/null || true
+                rm -f /etc/sysctl.d/99-v2ray.conf /etc/sysctl.d/99-slowdns.conf 2>/dev/null || true
                 sed -i '/^net\.core\.default_qdisc/d; /^net\.ipv4\.tcp_congestion_control/d; /^net\.ipv4\.tcp_notsent_lowat/d; /^net\.ipv4\.tcp_fastopen/d; /^fs\.file-max/d' /etc/sysctl.conf 2>/dev/null || true
                 sysctl -p 2>/dev/null || true
 
@@ -2559,7 +2577,7 @@ menu_desinstalle() {
                     mysql-server mysql-client mysql-common \
                     nodejs npm stunnel4 dropbear dnsdist \
                     certbot python3-certbot-nginx \
-                    nftables build-essential cmake \
+                    build-essential cmake \
                     golang-go 2>/dev/null || true) &
                 spinner $! "Suppression des paquets système"
                 quiet apt-get autoremove --purge -y
@@ -2574,6 +2592,7 @@ menu_desinstalle() {
                 find /root -maxdepth 1 -name '*.sh' -o -name '*.tar.gz' -o -name '*.zip' 2>/dev/null | xargs rm -f 2>/dev/null || true
                 rm -rf /usr/local/lib/node_modules 2>/dev/null || true
                 rm -f /usr/local/bin/{pm2,node,npm,npx} 2>/dev/null || true
+                rm -f /usr/local/bin/menu 2>/dev/null || true
                 # Supprimer l'autostart du panel
                 sed -i '/kighmu\|kighmu-panel\|Kighmu\|panel\.sh/d' /root/.bashrc /root/.profile 2>/dev/null || true
                 rm -f /usr/local/bin/kighmu-panel.sh 2>/dev/null || true
@@ -2585,8 +2604,10 @@ menu_desinstalle() {
                 cat > /tmp/cleanup-reboot.sh << 'CLEANUP'
 #!/bin/bash
 rm -rf /etc/kighmu /etc/kighmu-v2 /root/Kighmu /root/.kighmu_info 2>/dev/null
-rm -f /etc/profile.d/kighmu-panel.sh 2>/dev/null
+rm -f /etc/profile.d/kighmu-panel.sh /usr/local/bin/menu 2>/dev/null
 sed -i '/kighmu\|Kighmu\|acme\.sh/d' /root/.bashrc /root/.profile 2>/dev/null
+crontab -l 2>/dev/null | grep -vE 'kighmu|xray.*watchdog|traffic.*collect|auto-clean|cleanup' | crontab - 2>/dev/null || true
+rm -f /etc/systemd/system/xray-watchdog.service /etc/systemd/system/xray-watchdog.timer 2>/dev/null || true
 systemctl daemon-reload 2>/dev/null
 rm -f /tmp/cleanup-reboot.sh /etc/systemd/system/kighmu-cleanup.service 2>/dev/null
 CLEANUP
