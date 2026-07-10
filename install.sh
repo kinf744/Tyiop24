@@ -72,6 +72,30 @@ show_banner() {
     echo
 }
 
+# ── Page Domaine ──
+ask_domain() {
+    if [[ -n "${AUTO_DOMAIN:-}" ]]; then
+        DOMAIN="$AUTO_DOMAIN"
+        return
+    fi
+    local IP; IP=$(hostname -I | awk '{print $1}')
+    clear
+    echo -e "${CLR}${BG}"
+    echo -e "${BG}${CYAN}╔═══$(printf '═%.0s' {1..67})═══╗${RESET}"
+    echo -e "${BG}${CYAN}║${RESET}${TITLE_BG}$(center '🌐  DOMAINE DU PANEL  🌐' 71)${RESET}${BG}${CYAN}║${RESET}"
+    echo -e "${BG}${CYAN}╚═══$(printf '═%.0s' {1..67})═══╝${RESET}"
+    echo
+    echo -e "${BG}  ${LAV}Le domaine pointe vers ce VPS pour le panel HTTPS.${RESET}"
+    echo -e "${BG}  ${LAV}Laissez vide pour utiliser l'IP directement (HTTP).${RESET}"
+    echo
+    echo -e "${BG}  ${ORANGE}>>${RESET} ${LAV}Domaine [${CYAN}$IP${LAV}]${RESET}"
+    echo -ne "${BG}${WHITE}  » ${RESET}"; read -r DOMAIN
+    DOMAIN=${DOMAIN:-$IP}
+    echo
+    echo -e "${BG}  ${GREEN}Domaine configuré : ${CYAN}$DOMAIN${RESET}"
+    sleep 1
+}
+
 # ── Page NS (Nameserver) ──
 ask_nameservers() {
     if [[ -n "${AUTO_NS4:-}" || -n "${AUTO_NV4:-}" ]]; then
@@ -320,12 +344,7 @@ create_admin_user() {
 configure_nginx() {
     step_header '🌍  Nginx  🌍'
     local IP; IP=$(hostname -I | awk '{print $1}')
-    if [[ -n "${AUTO_DOMAIN:-}" ]]; then
-        DOMAIN="$AUTO_DOMAIN"
-    else
-        echo -e "${BG}  ${LAV}Domaine/IP pour le panel [${CYAN}$IP${LAV}]${RESET}"
-        echo -ne "${BG}${WHITE}  » ${RESET}"; read -r DOMAIN; DOMAIN=${DOMAIN:-$IP}
-    fi
+    DOMAIN=${DOMAIN:-$IP}
     mkdir -p /etc/kighmu /etc/nginx/sites-available /etc/nginx/sites-enabled
     echo "$DOMAIN" > /etc/kighmu/domain.txt 2>/dev/null || true
     systemctl stop nginx 2>/dev/null || true
@@ -870,6 +889,7 @@ full_install() {
     done
     systemctl daemon-reload 2>/dev/null || true
     log "Résidus nettoyés"
+    ask_domain
     ask_nameservers
     install_system_deps
     install_nodejs
