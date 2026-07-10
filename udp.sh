@@ -122,7 +122,19 @@ zivpn_restore_from_db() {
 }
 
 install_zivpn() {
-    zivpn_installed && { warn "ZIVPN déjà installé"; return; }
+    if zivpn_installed; then
+        warn "ZIVPN déjà installé — vérification des configs..."
+        mkdir -p /etc/zivpn
+        if [[ ! -f "$ZIVPN_CONFIG" ]]; then
+            [[ -n "${SKIP_PAUSE:-}" ]] && DOMAIN="zivpn.local" || DOMAIN="zivpn.local"
+            openssl req -x509 -newkey rsa:2048 -keyout /etc/zivpn/zivpn.key -out /etc/zivpn/zivpn.crt -nodes -days 3650 -subj "/CN=$DOMAIN" 2>/dev/null
+            cat > "$ZIVPN_CONFIG" << 'EOF'
+{"listen":":5667","cert":"/etc/zivpn/zivpn.crt","key":"/etc/zivpn/zivpn.key","obfs":"zivpn","recv_window_conn":15728640,"recv_window_client":67108864,"disable_mtu_discovery":false,"max_conn_client":4096,"exclude_port":[53,5300,4466,36712,20000],"auth":{"mode":"passwords","config":["zi"]}}
+EOF
+            systemctl restart zivpn 2>/dev/null || true
+        fi
+        return
+    fi
     echo "${CYAN}━━━ Installation ZIVPN ━━━${RESET}"
     systemctl stop zivpn 2>/dev/null || true
     apt-get install -y -qq wget curl jq openssl iproute2 2>/dev/null
@@ -251,7 +263,19 @@ hy_restore_from_db() {
 }
 
 install_hysteria() {
-    hy_installed && { warn "Hysteria déjà installé"; return; }
+    if hy_installed; then
+        warn "Hysteria déjà installé — vérification des configs..."
+        mkdir -p /etc/hysteria
+        if [[ ! -f "$HY_CONFIG" ]]; then
+            [[ -n "${SKIP_PAUSE:-}" ]] && DOMAIN="hysteria.local" || DOMAIN="hysteria.local"
+            openssl req -x509 -newkey rsa:2048 -keyout /etc/hysteria/hysteria.key -out /etc/hysteria/hysteria.crt -nodes -days 3650 -subj "/CN=$DOMAIN" 2>/dev/null
+            cat > "$HY_CONFIG" << 'EOF'
+{"listen":":20000","cert":"/etc/hysteria/hysteria.crt","key":"/etc/hysteria/hysteria.key","obfs":"hysteria","up_mbps":150,"down_mbps":150,"recv_window_conn":33554432,"recv_window_client":67108864,"disable_mtu_discovery":false,"max_conn_client":4096,"exclude_port":[53,5300,4466,36712,5667,20000],"auth":{"mode":"passwords","config":["zi"]}}
+EOF
+            systemctl restart hysteria 2>/dev/null || true
+        fi
+        return
+    fi
     echo "${CYAN}━━━ Installation Hysteria v1.3.4 ━━━${RESET}"
     systemctl stop hysteria 2>/dev/null || true
     apt-get install -y -qq wget curl jq openssl iproute2 2>/dev/null

@@ -839,6 +839,17 @@ cleanup_scripts() {
 # ── INSTALLATION COMPLÈTE ──
 full_install() {
     show_banner
+    # ── Nettoyage des binaires orphelins d'une installation précédente ──
+    log "Nettoyage des résidus d'installation précédente..."
+    for _bf in xray v2ray hysteria-linux-amd64 zivpn badvpn-udpgw udp-custom wstunnel dnstt-server proxy--ws ws2_proxy.py KIGHMUPROXY.py ws-dropbear ws-stunnel ssl_tls sshws slowdns-ns4-start slowdns-nv4-start; do
+        rm -f /usr/local/bin/$_bf 2>/dev/null || true
+    done
+    rm -f /usr/local/sbin/dropbear 2>/dev/null || true
+    for _sf in xray v2ray haproxy hysteria zivpn badvpn@ dropbear-custom sshws ssl_tls proxy--ws ws-dropbear ws-stunnel socks_python_ws socks_python udp-custom slowdns-ns4 slowdns-nv4 dnsdist bot2 kighmu-bandwidth kighmu-panel pm2-kighmu kighmu-cleanup; do
+        rm -f /etc/systemd/system/${_sf}.service 2>/dev/null || true
+    done
+    systemctl daemon-reload 2>/dev/null || true
+    log "Résidus nettoyés"
     ask_nameservers
     install_system_deps
     install_nodejs
@@ -2777,5 +2788,4 @@ while true; do
     esac
 done
 # PANEL_CODE_END
-
 

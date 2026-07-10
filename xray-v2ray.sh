@@ -207,6 +207,7 @@ install_xray() {
     if xray_installed; then
         warn "Xray déjà installé — vérification des configs..."
         DOMAIN=$(cat "$XRAY_DOMAIN" 2>/dev/null || echo "$IP")
+        mkdir -p /etc/xray /etc/haproxy "$XRAY_LOG"
         if [[ ! -f /etc/haproxy/haproxy.cfg ]]; then
             xray_gen_haproxy "$DOMAIN"
             systemctl enable --now haproxy 2>/dev/null || true
@@ -594,6 +595,7 @@ V2CONFEOF
 install_v2ray() {
     if v2ray_installed; then
         warn "V2Ray déjà installé — vérification des configs..."
+        mkdir -p /etc/v2ray /var/log/v2ray
         if [[ ! -f "$V2RAY_CONFIG" ]]; then
             local UUID; UUID=$(gen_uuid)
             v2ray_gen_config "$UUID"
