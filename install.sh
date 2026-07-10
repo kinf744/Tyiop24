@@ -2355,14 +2355,22 @@ menu_desinstalle() {
     prompt_sub "DÉSINSTALLER"
     case $SUB in
         1) clear
-            echo -e "${BG}${RED}╔══════════════════════════════════════════════════════════════════════╗${RESET}"
-            echo -e "${BG}${RED}║${RESET}  ${WHITE}⚠  DÉSINSTALLATION COMPLÈTE  ⚠${RESET}                           ${BG}${RED}║${RESET}"
-            echo -e "${BG}${RED}║${RESET}  ${YELLOW}Pour confirmer, tapez le mot: ${WHITE}PURGE${RESET}                    ${BG}${RED}║${RESET}"
-            echo -e "${BG}${RED}╚══════════════════════════════════════════════════════════════════════╝${RESET}"
-            read -rp "  » " CONFIRM
+            echo -e "${CLR}${BG}"
+            echo -e "${BG}${RED}╔═══$(printf '═%.0s' {1..67})═══╗${RESET}"
+            echo -e "${BG}${RED}║${RESET}${BG}$(center '⚠  DÉSINSTALLATION COMPLÈTE  ⚠' 71)${RESET}${BG}${RED}║${RESET}"
+            echo -e "${BG}${RED}╚═══$(printf '═%.0s' {1..67})═══╝${RESET}"
+            echo
+            echo -e "${BG}  ${RED}╔══════════════════════════════════════════════════════════════════╗${RESET}"
+            echo -e "${BG}  ${RED}║${RESET}  ${WHITE}Action irréversible — tous les services, configs,${RESET}   ${RED}║${RESET}"
+            echo -e "${BG}  ${RED}║${RESET}  ${WHITE}utilisateurs, logs et paquets seront supprimés.${RESET}     ${RED}║${RESET}"
+            echo -e "${BG}  ${RED}║${RESET}  ${WHITE}VPS remis à l'état d'origine.${RESET}                        ${RED}║${RESET}"
+            echo -e "${BG}  ${RED}╚══════════════════════════════════════════════════════════════════╝${RESET}"
+            echo
+            echo -e "${BG}  ${YELLOW}Pour confirmer, tapez:${RESET} ${WHITE}PURGE${RESET}"
+            echo -ne "${BG}${WHITE}  » ${RESET}"; read -r CONFIRM
             if [[ "$CONFIRM" == "PURGE" ]]; then
                 # ── 1. Arrêt de tous les services ──
-                echo -e "${YELLOW}  [1/12] Arrêt de tous les services...${RESET}"
+                echo -e "${BG}  ${ORANGE}[1/12]${RESET} ${LAV}Arrêt de tous les services...${RESET}"
                 for s in $(systemctl list-units --type=service --all --no-legend 2>/dev/null | awk '{print $1}' | sed 's/\.service//' | grep -iE 'xray|v2ray|nginx|haproxy|hysteria|zivpn|dropbear|sshws|ws-|stunnel|socks|udp-custom|slowdns|dnsdist|bot2|mysql|kighmu|panel|badvpn|nftables-tunnel|proxy|pm2|kighmu-cleanup'); do
                     systemctl disable --now "$s" 2>/dev/null || true
                 done
@@ -2373,7 +2381,7 @@ menu_desinstalle() {
                 rm -f /root/.pm2/dump.pm2 2>/dev/null || true
 
                 # ── 2. Suppression de tous les binaires ──
-                echo -e "${YELLOW}  [2/12] Suppression des binaires...${RESET}"
+                echo -e "${BG}  ${ORANGE}[2/12]${RESET} ${LAV}Suppression des binaires...${RESET}"
                 rm -f \
                     /usr/local/bin/xray \
                     /usr/local/bin/v2ray \
@@ -2400,7 +2408,7 @@ menu_desinstalle() {
                     /root/Kighmu/bot2 2>/dev/null || true
 
                 # ── 3. Suppression fichiers systemd ──
-                echo -e "${YELLOW}  [3/12] Suppression des services systemd...${RESET}"
+                echo -e "${BG}  ${ORANGE}[3/12]${RESET} ${LAV}Suppression des services systemd...${RESET}"
                 rm -f \
                     /etc/systemd/system/{xray,v2ray,nginx,haproxy,hysteria,zivpn,dropbear-custom,sshws,ssl_tls,proxy--ws,ws-dropbear,ws-stunnel,socks_python_ws,socks_python,udp-custom,badvpn@,slowdns-ns4,slowdns-nv4,dnsdist,bot2,kighmu-bandwidth,kighmu-panel,pm2-kighmu,kighmu-cleanup}.service \
                     /etc/systemd/system/nftables-tunnel@*.service \
@@ -2411,7 +2419,7 @@ menu_desinstalle() {
                 find /etc/systemd/system/multi-user.target.wants/ -name '*kighmu*' -o -name '*xray*' -o -name '*v2ray*' -o -name '*slowdns*' -o -name '*badvpn*' -o -name '*sshws*' -o -name '*hysteria*' -o -name '*zivpn*' -o -name '*dropbear*' -o -name '*udp-custom*' -o -name '*nginx*' -o -name '*haproxy*' -o -name '*mysql*' -o -name '*cleanup*' 2>/dev/null | xargs rm -f 2>/dev/null || true
 
                 # ── 4. Purge nftables + iptables ──
-                echo -e "${YELLOW}  [4/12] Purge nftables + iptables...${RESET}"
+                echo -e "${BG}  ${ORANGE}[4/12]${RESET} ${LAV}Purge nftables + iptables...${RESET}"
                 for t in $(nft list tables 2>/dev/null | grep -oP '(?<=table inet )\S+' | grep -iE 'kighmu|slowdns|xray|v2ray|zivpn|hysteria|badvpn|udp-custom|dropbear|panel|proxy'); do
                     nft delete table inet "$t" 2>/dev/null || true
                 done
@@ -2426,7 +2434,7 @@ menu_desinstalle() {
                 ufw disable 2>/dev/null || true
 
                 # ── 5. Suppression répertoires configurables + données ──
-                echo -e "${YELLOW}  [5/12] Suppression des configurations...${RESET}"
+                echo -e "${BG}  ${ORANGE}[5/12]${RESET} ${LAV}Suppression des configurations...${RESET}"
                 # Supprimer la base de données MySQL
                 if command -v mysql &>/dev/null; then
                     mysql -e "DROP DATABASE IF EXISTS \`${DB_NAME:-kighmu}\`;" 2>/dev/null || true
@@ -2462,7 +2470,7 @@ menu_desinstalle() {
                     /root/.kighmu_info 2>/dev/null || true
 
                 # ── 6. Suppression logs ──
-                echo -e "${YELLOW}  [6/12] Suppression des logs...${RESET}"
+                echo -e "${BG}  ${ORANGE}[6/12]${RESET} ${LAV}Suppression des logs...${RESET}"
                 rm -rf \
                     /var/log/xray /var/log/v2ray /var/log/slowdns \
                     /var/log/hysteria /var/log/zivpn /var/log/nginx \
@@ -2470,11 +2478,11 @@ menu_desinstalle() {
                     /root/.pm2/logs 2>/dev/null || true
 
                 # ── 7. Suppression certificats SSL ──
-                echo -e "${YELLOW}  [7/12] Suppression des certificats SSL...${RESET}"
+                echo -e "${BG}  ${ORANGE}[7/12]${RESET} ${LAV}Suppression des certificats SSL...${RESET}"
                 rm -rf /etc/letsencrypt /etc/ssl/kighmu 2>/dev/null || true
 
                 # ── 8. Suppression utilisateurs (système + SSH) ──
-                echo -e "${YELLOW}  [8/12] Suppression des utilisateurs...${RESET}"
+                echo -e "${BG}  ${ORANGE}[8/12]${RESET} ${LAV}Suppression des utilisateurs...${RESET}"
                 for u in xray v2ray hysteria zivpn mysql; do
                     userdel -r "$u" 2>/dev/null || true
                 done
@@ -2486,7 +2494,7 @@ menu_desinstalle() {
                 done
 
                 # ── 9. Restauration SSH par défaut + resolv.conf + sysctl ──
-                echo -e "${YELLOW}  [9/12] Restauration SSH, resolv.conf, sysctl...${RESET}"
+                echo -e "${BG}  ${ORANGE}[9/12]${RESET} ${LAV}Restauration SSH, resolv.conf, sysctl...${RESET}"
                 # Restaurer sshd_config (enlever Banner, Port custom)
                 sed -i '/^Banner /d' /etc/ssh/sshd_config 2>/dev/null || true
                 sed -i '/^Port /d' /etc/ssh/sshd_config 2>/dev/null || true
@@ -2503,22 +2511,23 @@ menu_desinstalle() {
                 sysctl -p 2>/dev/null || true
 
                 # ── 10. Suppression paquets ──
-                echo -e "${YELLOW}  [10/12] Suppression des paquets...${RESET}"
-                apt-get remove --purge -y \
+                echo -e "${BG}  ${ORANGE}[10/12]${RESET} ${LAV}Suppression des paquets...${RESET}"
+                (apt-get remove --purge -y \
                     xray-server v2ray haproxy hysteria zivpn \
                     nginx nginx-common nginx-core \
                     mysql-server mysql-client mysql-common \
                     nodejs npm stunnel4 dropbear dnsdist \
                     certbot python3-certbot-nginx \
                     nftables build-essential cmake \
-                    golang-go 2>/dev/null || true
-                apt-get autoremove --purge -y 2>/dev/null || true
-                apt-get autoclean 2>/dev/null || true
+                    golang-go 2>/dev/null || true) &
+                spinner $! "Suppression des paquets système"
+                quiet apt-get autoremove --purge -y
+                quiet apt-get autoclean
                 rm -f /etc/apt/sources.list.d/nodesource.list 2>/dev/null || true
-                apt-get update 2>/dev/null || true
+                quiet apt-get update
 
                 # ── 11. Nettoyage temp + reliquats + autostart panel ──
-                echo -e "${YELLOW}  [11/12] Nettoyage complet...${RESET}"
+                echo -e "${BG}  ${ORANGE}[11/12]${RESET} ${LAV}Nettoyage complet...${RESET}"
                 rm -rf /tmp/{Tyiop24,Kighmu,wstunnel_inst,xray_inst,panel.sh} 2>/dev/null || true
                 rm -f /root/install.sh /root/udp.sh /root/ssh.sh /root/xray-v2ray.sh /root/panel.sh 2>/dev/null || true
                 find /root -maxdepth 1 -name '*.sh' -o -name '*.tar.gz' -o -name '*.zip' 2>/dev/null | xargs rm -f 2>/dev/null || true
@@ -2529,6 +2538,7 @@ menu_desinstalle() {
                 rm -f /usr/local/bin/kighmu-panel.sh 2>/dev/null || true
 
                 # ── 12. Rechargement systemd + cleanup post-reboot ──
+                echo -e "${BG}  ${ORANGE}[12/12]${RESET} ${LAV}Rechargement systemd + cleanup post-reboot...${RESET}"
                 systemctl daemon-reload 2>/dev/null || true
                 # Créer un script post-reboot pour enlever les derniers résidus
                 cat > /tmp/cleanup-reboot.sh << 'CLEANUP'
@@ -2557,15 +2567,16 @@ CLNSRV
                 systemctl enable kighmu-cleanup.service 2>/dev/null || true
 
                 echo
-                echo -e "${GREEN}  ╔═══════════════════════════════════════════════════════╗${RESET}"
-                echo -e "${GREEN}  ║${RESET}  ✓ Désinstallation COMPLÈTE terminée               ${GREEN}║${RESET}"
-                echo -e "${GREEN}  ║${RESET}  ${WHITE}VPS nettoyé — état d'origine${RESET}              ${GREEN}║${RESET}"
-                echo -e "${GREEN}  ║${RESET}  ${YELLOW}Recommandé : reboot${RESET}                      ${GREEN}║${RESET}"
-                echo -e "${GREEN}  ║${RESET}  ${DIM}(un cleanup post-reboot supprimera les${RESET}      ${GREEN}║${RESET}"
-                echo -e "${GREEN}  ║${RESET}  ${DIM} derniers résidus)${RESET}                          ${GREEN}║${RESET}"
-                echo -e "${GREEN}  ╚═══════════════════════════════════════════════════════╝${RESET}"
+                echo -e "${BG}${CYAN}╔═══$(printf '═%.0s' {1..67})═══╗${RESET}"
+                echo -e "${BG}${CYAN}║${RESET}${TITLE_BG}$(center '✅  DÉSINSTALLATION TERMINÉE  ✅' 71)${RESET}${BG}${CYAN}║${RESET}"
+                echo -e "${BG}${CYAN}╚═══$(printf '═%.0s' {1..67})═══╝${RESET}"
+                echo
+                echo -e "${BG}  ${GREEN}✓${RESET} ${LAV}VPS nettoyé — état d'origine${RESET}"
+                echo -e "${BG}  ${YELLOW}⚠${RESET} ${LAV}Recommandé : reboot${RESET}"
+                echo -e "${BG}  ${DIM}  (un cleanup post-reboot supprimera les derniers résidus)${RESET}"
+                echo
             else
-                echo -e "  ${YELLOW}Désinstallation annulée.${RESET}"
+                echo -e "${BG}  ${YELLOW}Désinstallation annulée.${RESET}"
             fi; pause;;
         0|q) ;;
     esac
