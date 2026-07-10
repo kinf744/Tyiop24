@@ -1088,6 +1088,21 @@ center() {
     printf "%$(( (w-l)/2 ))s%b%$(( (w-l+1)/2 ))s" "" "$t" ""
 }
 
+# ── Helpers (affichage + silencieux) ──
+log()   { echo -e "${GREEN}[✓]${RESET} $*"; }
+warn()  { echo -e "${YELLOW}[!]${RESET} $*"; }
+err()   { echo -e "${RED}[✗]${RESET} $*"; }
+quiet() { "$@" >> /var/log/kighmu-panel.log 2>&1; }
+spinner() {
+    local pid=$1 msg=$2; local -a s=('⣾' '⣽' '⣻' '⢿' '⡿' '⣟' '⣯' '⣷')
+    echo -ne "${BG}  ${LAV}$msg... ${RESET}"
+    while kill -0 "$pid" 2>/dev/null; do
+        for c in "${s[@]}"; do echo -ne "\r${BG}  ${LAV}$msg... ${CYAN}$c${RESET}"; sleep 0.1; done
+    done
+    wait "$pid" 2>/dev/null
+    echo -e "\r${BG}  ${GREEN}$msg... ✓${RESET}   "
+}
+
 # ── Couvre chaque ligne du fond violet ──
 with_bg() { echo -ne "${BG}$1${RESET}"; }
 
