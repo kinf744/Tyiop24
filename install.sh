@@ -186,9 +186,10 @@ install_nodejs() {
         spinner $! "Installation Node.js"
         log "Node.js $(node -v) installé"
     fi
-    (npm install -g pm2 --quiet 2>/dev/null || true) &
+    (npm install -g pm2 --quiet >/dev/null 2>&1 || true) &
     spinner $! "Installation PM2"
-    log "PM2 $(pm2 -v 2>/dev/null || echo '?')"
+    local PM2_V; PM2_V=$(pm2 -v 2>/dev/null || echo '?')
+    log "PM2 $PM2_V"
 }
 
 # ── MYSQL ──
@@ -293,7 +294,7 @@ install_npm_panel() {
     step_header '📦  Modules Node.js  📦'
     pushd "$PANEL_DIR" >/dev/null || return 1
     if [[ ! -d node_modules ]]; then
-        (NODE_OPTIONS="--dns-result-order=ipv4first" npm install --production --quiet 2>/dev/null || npm install --production --quiet 2>/dev/null || warn "npm install warnings") &
+        (NODE_OPTIONS="--dns-result-order=ipv4first" npm install --production --quiet >/dev/null 2>&1 || npm install --production --quiet >/dev/null 2>&1 || warn "npm install warnings") &
         spinner $! "Installation des modules npm"
         log "Modules installés"
     fi
