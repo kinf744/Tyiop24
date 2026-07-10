@@ -323,22 +323,30 @@ configure_nginx() {
 
     if [[ "$DOMAIN" =~ \. ]] && ! [[ "$DOMAIN" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
         # ── Domaine réel → HTTPS avec acme.sh ──
-        if ! command -v ~/.acme.sh/acme.sh &>/dev/null; then
-            curl -fsSL https://get.acme.sh | bash 2>/dev/null || true
-        fi
-        # sshws bloque le port 80 → on l'arrête temporairement
-        systemctl stop sshws 2>/dev/null || true
-        local ACME_SH; ACME_SH=$(ls ~/.acme.sh/acme.sh 2>/dev/null || echo "/root/.acme.sh/acme.sh")
-        "$ACME_SH" --register-account -m admin@"$DOMAIN" 2>/dev/null || true
-        "$ACME_SH" --issue --standalone -d "$DOMAIN" --keylength ec-256 --force 2>/dev/null \
-            || "$ACME_SH" --issue --standalone -d "$DOMAIN" --keylength ec-256 --server letsencrypt 2>/dev/null || true
-        if [[ -f ~/.acme.sh/"${DOMAIN}"_ecc/fullchain.cer ]]; then
-            log "Certificat SSL obtenu pour $DOMAIN (acme.sh)"
+        local ACME_CERT="/etc/nginx/ssl/${DOMAIN}.crt"
+        if [[ -f "$ACME_CERT" ]]; then
+            log "Certificat SSL déjà présent pour $DOMAIN — réutilisation"
             mkdir -p /etc/nginx/ssl
-            "$ACME_SH" --installcert -d "$DOMAIN" --ecc \
-                --key-file /etc/nginx/ssl/"${DOMAIN}".key \
-                --fullchain-file /etc/nginx/ssl/"${DOMAIN}".crt \
-                --reloadcmd "systemctl reload nginx" 2>/dev/null || true
+        else
+            if ! command -v ~/.acme.sh/acme.sh &>/dev/null; then
+                curl -fsSL https://get.acme.sh | bash 2>/dev/null || true
+            fi
+            # sshws bloque le port 80 → on l'arrête temporairement
+            systemctl stop sshws 2>/dev/null || true
+            local ACME_SH; ACME_SH=$(ls ~/.acme.sh/acme.sh 2>/dev/null || echo "/root/.acme.sh/acme.sh")
+            "$ACME_SH" --register-account -m admin@"$DOMAIN" 2>/dev/null || true
+            "$ACME_SH" --issue --standalone -d "$DOMAIN" --keylength ec-256 --force 2>/dev/null \
+                || "$ACME_SH" --issue --standalone -d "$DOMAIN" --keylength ec-256 --server letsencrypt 2>/dev/null || true
+        fi
+        if [[ -f ~/.acme.sh/"${DOMAIN}"_ecc/fullchain.cer || -f "$ACME_CERT" ]]; then
+            log "Certificat SSL présent pour $DOMAIN"
+            mkdir -p /etc/nginx/ssl
+            if [[ ! -f "$ACME_CERT" ]]; then
+                "$ACME_SH" --installcert -d "$DOMAIN" --ecc \
+                    --key-file /etc/nginx/ssl/"${DOMAIN}".key \
+                    --fullchain-file /etc/nginx/ssl/"${DOMAIN}".crt \
+                    --reloadcmd "systemctl reload nginx" 2>/dev/null || true
+            fi
             cat > /etc/nginx/sites-available/kighmu << 'NGXEOF'
 server {
     listen 8585;
@@ -477,7 +485,7 @@ NGXEOF
 }
 
 # ── Création dossiers de logs ──
-for _logdir in v2ray xray slowdns hysteria zivpn udp-custom; do
+for _logdir in v2ray xray slowdns hysteria zivpn udp-custom nginx; do
     mkdir -p /var/log/$_logdir
 done
 
