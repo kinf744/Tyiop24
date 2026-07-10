@@ -76,7 +76,7 @@ install_dropbear() {
 
         local DIR="/etc/dropbear"; mkdir -p "$DIR"
         for key in rsa ecdsa ed25519; do
-            /usr/local/bin/dropbearkey -t "$key" -f "$DIR/dropbear_${key}_host_key" 2>/dev/null || true
+            /usr/local/bin/dropbearkey -t "$key" -f "$DIR/dropbear_${key}_host_key" >/dev/null 2>&1 || true
         done
         chmod 600 "$DIR"/*_host_key 2>/dev/null || true
         echo "Bienvenue sur Kighmu - Connexion autorisée" > "$DIR/banner.txt"
