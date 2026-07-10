@@ -194,6 +194,15 @@ install_nodejs() {
 # ── MYSQL ──
 install_mysql() {
     step_header '🗄️  MySQL + Base de données  🗄️'
+    # Recréer l'utilisateur mysql s'il a été supprimé (par une désinstallation)
+    if ! id mysql &>/dev/null; then
+        useradd -r -s /usr/sbin/nologin -M mysql 2>/dev/null || true
+        chown -R mysql:mysql /var/lib/mysql /var/run/mysqld 2>/dev/null || true
+    fi
+    # Ajouter un override pour éviter le rate-limiting systemd
+    mkdir -p /etc/systemd/system/mysql.service.d
+    printf '[Service]\nRestart=always\nRestartSec=5\nStartLimitIntervalSec=0\nStartLimitBurst=0\n' > /etc/systemd/system/mysql.service.d/override.conf
+    systemctl daemon-reload 2>/dev/null || true
     systemctl start mysql 2>/dev/null || true
     systemctl enable mysql 2>/dev/null || true
 
@@ -2481,16 +2490,10 @@ menu_desinstalle() {
                 echo -e "${BG}  ${ORANGE}[7/12]${RESET} ${LAV}Suppression des certificats SSL...${RESET}"
                 rm -rf /etc/letsencrypt /etc/ssl/kighmu 2>/dev/null || true
 
-                # ── 8. Suppression utilisateurs (système + SSH) ──
+                # ── 8. Suppression utilisateurs (SSH seulement, PAS les utilisateurs système) ──
                 echo -e "${BG}  ${ORANGE}[8/12]${RESET} ${LAV}Suppression des utilisateurs...${RESET}"
-                for u in xray v2ray hysteria zivpn mysql; do
-                    userdel -r "$u" 2>/dev/null || true
-                done
                 awk -F: '$7~/bash|sh/ && $3>=1000{print $1}' /etc/passwd 2>/dev/null | while read -r u; do
                     userdel -r "$u" 2>/dev/null || true
-                done
-                for g in xray v2ray hysteria zivpn kighmu; do
-                    groupdel "$g" 2>/dev/null || true
                 done
 
                 # ── 9. Restauration SSH par défaut + resolv.conf + sysctl ──
