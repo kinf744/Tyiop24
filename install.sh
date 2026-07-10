@@ -28,6 +28,15 @@ warn() { echo -e "${YELLOW}[!]${RESET} $*"; }
 err() { echo -e "${RED}[✗]${RESET} $*"; }
 pause() { echo; read -rp "  Press Enter..."; }
 
+# ── Logging ──
+INSTALL_LOG="/var/log/kighmu-install.log"
+: > "$INSTALL_LOG"
+# On pipe tout (stdout+stderr) dans le log ET vers le terminal
+exec > >(tee -a "$INSTALL_LOG") 2>&1
+_TEE_PID=$!
+trap 'kill $_TEE_PID 2>/dev/null; rm -f /tmp/kighmu-tee.* 2>/dev/null' EXIT INT TERM
+log "Installation log: $INSTALL_LOG"
+
 gen_pass() { openssl rand -base64 20 | tr -d '=/+' | head -c "$1"; }
 
 step_header() {
@@ -945,6 +954,7 @@ full_install() {
     echo -e "${BG}${CYAN}╚═══$(printf '═%.0s' {1..57})═══╝${RESET}"
     echo
     echo -e "${BG}  ${LAV}Panel Web:${RESET} ${CYAN}http://$(hostname -I | awk '{print $1}'):8585/admin/${RESET}"
+    echo -e "${BG}  ${LAV}Log complet:${RESET} ${YELLOW}$INSTALL_LOG${RESET}"
     echo
     read -rp "  Nettoyer les fichiers d'installation ? (o/N): " C
     [[ "$C" =~ ^[oO]$ ]] && cleanup_scripts || echo -e "  ${YELLOW}Scripts dans : $SCRIPT_DIR${RESET}"
@@ -2804,3 +2814,4 @@ while true; do
     esac
 done
 # PANEL_CODE_END
+KIGHMU_LOG=/var/log/kighmu-install.log
