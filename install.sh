@@ -2814,4 +2814,4 @@ while true; do
     esac
 done
 # PANEL_CODE_END
-KIGHMU_LOG=/var/log/kighmu-install.log
+
