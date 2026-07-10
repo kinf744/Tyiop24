@@ -201,24 +201,27 @@ install_mysql() {
     # Recréer l'utilisateur mysql s'il a été supprimé (par une désinstallation)
     if ! id mysql &>/dev/null; then
         useradd -r -s /usr/sbin/nologin -M mysql 2>/dev/null || true
-        chown -R mysql:mysql /var/lib/mysql /var/run/mysqld 2>/dev/null || true
     fi
-    # S'assurer que les répertoires critiques appartiennent à mysql
-    chown -R mysql:mysql /var/lib/mysql /var/run/mysqld /var/log/mysql 2>/dev/null || true
     # Ajouter un override pour éviter le rate-limiting systemd
     mkdir -p /etc/systemd/system/mysql.service.d
     printf '[Service]\nRestart=always\nRestartSec=5\nStartLimitIntervalSec=0\nStartLimitBurst=0\n' > /etc/systemd/system/mysql.service.d/override.conf
     systemctl daemon-reload 2>/dev/null || true
-    # Tentatives de démarrage MySQL avec récupération
-    local _ms_attempt=0
+    # Initialiser la base MySQL si le répertoire de données est absent
+    if [[ ! -d /var/lib/mysql/mysql ]]; then
+        warn "Initialisation de la base MySQL..."
+        mkdir -p /var/lib/mysql /var/run/mysqld /var/log/mysql
+        chown -R mysql:mysql /var/lib/mysql /var/run/mysqld /var/log/mysql
+        mysqld --initialize-insecure --user=mysql 2>/dev/null || true
+    else
+        chown -R mysql:mysql /var/lib/mysql /var/run/mysqld /var/log/mysql 2>/dev/null || true
+    fi
+    # Démarrer MySQL avec attente
     systemctl start mysql 2>/dev/null || true
+    local _ms_attempt=0
     while ! mysqladmin ping 2>/dev/null; do
         _ms_attempt=$((_ms_attempt + 1))
         if [[ $_ms_attempt -ge 12 ]]; then
-            warn "MySQL ne démarre pas — exécution mysql_upgrade..."
-            mysql_upgrade --force 2>/dev/null || true
-            systemctl start mysql 2>/dev/null || true
-            sleep 3
+            err "MySQL impossible à démarrer — consulte /var/log/mysql/error.log"
             break
         fi
         sleep 5
