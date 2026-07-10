@@ -898,6 +898,11 @@ full_install() {
         rm -f /etc/systemd/system/${_sf}.service 2>/dev/null || true
     done
     systemctl daemon-reload 2>/dev/null || true
+    # Nettoyer les résidus iptables-nft qui peuvent casser les tunnels UDP
+    iptables -t nat -F 2>/dev/null || true
+    iptables -t mangle -F 2>/dev/null || true
+    iptables -F 2>/dev/null || true
+    iptables -X 2>/dev/null || true
     log "Résidus nettoyés"
     ask_domain
     ask_nameservers
@@ -2450,8 +2455,7 @@ menu_desinstalle() {
                 done
                 nft flush ruleset 2>/dev/null || true
                 rm -f /etc/nftables/*.nft 2>/dev/null || true
-                rm -f /etc/nftables/*.nft 2>/dev/null || true
-                # Reset iptables to default (allow all)
+                # Purge iptables-nft (y compris les règles DNAT génériques qui cassent les autres tunnels)
                 iptables -P INPUT ACCEPT 2>/dev/null; iptables -P FORWARD ACCEPT 2>/dev/null; iptables -P OUTPUT ACCEPT 2>/dev/null
                 iptables -t nat -F 2>/dev/null; iptables -t mangle -F 2>/dev/null; iptables -F 2>/dev/null; iptables -X 2>/dev/null
                 ip6tables -P INPUT ACCEPT 2>/dev/null; ip6tables -P FORWARD ACCEPT 2>/dev/null; ip6tables -P OUTPUT ACCEPT 2>/dev/null
