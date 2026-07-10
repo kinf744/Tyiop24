@@ -987,31 +987,16 @@ main_menu() {
         echo -e "${BG}${CYAN}║${RESET}${TITLE_BG}$(center '🛡️  KIGHMU PANEL v4  🛡️' 71)${RESET}${BG}${CYAN}║${RESET}"
         echo -e "${BG}${CYAN}╚═══$(printf '═%.0s' {1..67})═══╝${RESET}"
         echo
-        echo -e "${BG}  ${LAV}Installation :${RESET}"
+        echo -e "${BG}  ${LAV}Actions :${RESET}"
         echo -e "${BG}  ${ORANGE}[01]${RESET} ${WHITE}Installation complète${RESET}"
-        echo -e "${BG}  ${ORANGE}[02]${RESET} ${WHITE}Panel uniquement${RESET}"
-        echo -e "${BG}  ${ORANGE}[03]${RESET} ${WHITE}Statut des services${RESET}"
+        echo -e "${BG}  ${ORANGE}[02]${RESET} ${RED}🧹 Nettoyer et quitter${RESET}"
         echo
-        echo -e "${BG}  ${LAV}Tunnels :${RESET}"
-        echo -e "${BG}  ${ORANGE}[04]${RESET} ${WHITE}UDP (ZIVPN, Hysteria, BadVPN, UDP-Custom)${RESET}"
-        echo -e "${BG}  ${ORANGE}[05]${RESET} ${WHITE}Xray & V2Ray (VMess, VLESS, Trojan, Shadowsocks)${RESET}"
-        echo -e "${BG}  ${ORANGE}[06]${RESET} ${WHITE}SSH (Dropbear, SlowDNS, SSL, WS, SOCKS)${RESET}"
-        echo
-        echo -e "${BG}  ${LAV}Contrôle :${RESET}"
-        echo -e "${BG}  ${ORANGE}[07]${RESET} ${WHITE}Panneau de contrôle SSH${RESET}"
-        echo -e "${BG}  ${ORANGE}[08]${RESET} ${RED}🧹 Nettoyer les scripts d'installation${RESET}"
         echo -e "${BG}  ${ORANGE}[00]${RESET} ${WHITE}Quitter${RESET}"
         echo
         echo -ne "${BG}${LAV}  Choix »${RESET} ${WHITE}"; read -r CHOIX; echo -e "${RESET}"
         case $CHOIX in
             1) full_install ;;
-            2) install_system_deps; install_nodejs; deploy_panel_files; configure_env; install_mysql; install_npm_panel; create_admin_user; configure_nginx; setup_nftables; pause ;;
-            3) show_status ;;
-            4) bash "$SCRIPT_DIR/udp.sh" ;;
-            5) bash "$SCRIPT_DIR/xray-v2ray.sh" ;;
-            6) bash "$SCRIPT_DIR/ssh.sh" ;;
-            7) deploy_control_panel ;;
-            8) cleanup_scripts ;;
+            2) cleanup_scripts ;;
             0|00) exit 0 ;;
             *) ;;
         esac
