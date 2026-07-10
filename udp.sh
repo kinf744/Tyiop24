@@ -16,9 +16,11 @@ setup_colors() {
     fi
 }
 setup_colors
-log() { echo -e "${GREEN}[✓]${RESET} $*"; }
-warn() { echo -e "${YELLOW}[!]${RESET} $*"; }
-err() { echo -e "${RED}[✗]${RESET} $*"; }
+if ! declare -F log &>/dev/null; then
+    log() { echo -e "${GREEN}[✓]${RESET} $*"; }
+    warn() { echo -e "${YELLOW}[!]${RESET} $*"; }
+    err() { echo -e "${RED}[✗]${RESET} $*"; }
+fi
 pause() { [[ -n "${SKIP_PAUSE:-}" ]] && return 0; echo; read -rp "Appuyez sur Entrée..."; }
 check_root() { [[ $EUID -ne 0 ]] && { err "Root requis"; exit 1; } }
 
