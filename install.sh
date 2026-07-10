@@ -23,27 +23,32 @@ RESET='\e[0m'
 CLR='\e[2J\e[H'
 
 center() { local t="$1" w=${2:-60} l; l=$(echo -e "$t" | sed 's/\x1b\[[0-9;]*m//g' | wc -c); l=$((l-1)); printf "%$(( (w-l)/2 ))s%b%$(( (w-l+1)/2 ))s" "" "$t" ""; }
-log() { echo -e "${GREEN}[✓]${RESET} $*"; }
-warn() { echo -e "${YELLOW}[!]${RESET} $*"; }
-err() { echo -e "${RED}[✗]${RESET} $*"; }
-pause() { echo; read -rp "  Press Enter..."; }
 
-# ── Logging ──
+# ── Logging (propre : terminal stylé + fichier complet) ──
 INSTALL_LOG="/var/log/kighmu-install.log"
 : > "$INSTALL_LOG"
-# On pipe tout (stdout+stderr) dans le log ET vers le terminal
-exec > >(tee -a "$INSTALL_LOG") 2>&1
-_TEE_PID=$!
-trap 'kill $_TEE_PID 2>/dev/null; rm -f /tmp/kighmu-tee.* 2>/dev/null' EXIT INT TERM
-log "Installation log: $INSTALL_LOG"
+log()   { echo -e "${GREEN}[✓]${RESET} $*" | tee -a "$INSTALL_LOG"; }
+warn()  { echo -e "${YELLOW}[!]${RESET} $*" | tee -a "$INSTALL_LOG"; }
+err()   { echo -e "${RED}[✗]${RESET} $*" | tee -a "$INSTALL_LOG"; }
+quiet() { "$@" >> "$INSTALL_LOG" 2>&1; }
+pause() { echo; read -rp "  Press Enter..."; }
+spinner() {
+    local pid=$1 msg=$2; local -a s=('⣾' '⣽' '⣻' '⢿' '⡿' '⣟' '⣯' '⣷')
+    echo -ne "${BG}  ${LAV}$msg... ${RESET}"
+    while kill -0 "$pid" 2>/dev/null; do
+        for c in "${s[@]}"; do echo -ne "\r${BG}  ${LAV}$msg... ${CYAN}$c${RESET}"; sleep 0.1; done
+    done
+    wait "$pid" 2>/dev/null
+    echo -e "\r${BG}  ${GREEN}$msg... ✓${RESET}   "
+}
 
 gen_pass() { openssl rand -base64 20 | tr -d '=/+' | head -c "$1"; }
 
 step_header() {
-    echo
-    echo -e "${BG}${CYAN}╔═══$(printf '═%.0s' {1..57})═══╗${RESET}"
-    echo -e "${BG}${CYAN}║${RESET}${TITLE_BG}$(center "$1" 61)${RESET}${BG}${CYAN}║${RESET}"
-    echo -e "${BG}${CYAN}╚═══$(printf '═%.0s' {1..57})═══╝${RESET}"
+    echo | tee -a "$INSTALL_LOG"
+    echo -e "${BG}${CYAN}╔═══$(printf '═%.0s' {1..57})═══╗${RESET}" | tee -a "$INSTALL_LOG"
+    echo -e "${BG}${CYAN}║${RESET}${TITLE_BG}$(center "$1" 61)${RESET}${BG}${CYAN}║${RESET}" | tee -a "$INSTALL_LOG"
+    echo -e "${BG}${CYAN}╚═══$(printf '═%.0s' {1..57})═══╝${RESET}" | tee -a "$INSTALL_LOG"
 }
 
 check_root() {
@@ -100,16 +105,17 @@ ask_nameservers() {
 # ── DÉPENDANCES (totalement silencieuses) ──
 install_system_deps() {
     step_header '📦  Dépendances Système  📦'
-    apt-get update -qq 2>/dev/null
-    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+    (apt-get update -qq 2>/dev/null) &
+    spinner $! "Mise à jour des paquets"
+    (DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
         curl wget jq openssl nftables iproute2 \
         xz-utils unzip zip sudo ufw \
         apt-transport-https gnupg lsb-release \
         cron bash-completion ca-certificates lsof \
         build-essential cmake python3 python3-pip \
-        git nginx mysql-server 2>/dev/null
-    # Réparation si fichiers de base supprimés par une désinstallation incomplète
-    [[ ! -f /etc/nginx/mime.types ]] && apt-get install --reinstall -y -qq nginx-common 2>/dev/null || true
+        git nginx mysql-server 2>/dev/null) &
+    spinner $! "Installation des dépendances"
+    [[ ! -f /etc/nginx/mime.types ]] && quiet apt-get install --reinstall -y -qq nginx-common 2>/dev/null || true
     if [[ ! -f /etc/nginx/nginx.conf ]]; then
         rm -f /etc/systemd/system/nginx.service.d/override.conf 2>/dev/null || true
         rm -f /etc/nginx/sites-enabled/* /etc/nginx/conf.d/* 2>/dev/null || true
@@ -135,11 +141,11 @@ NGXCONF
         fi
     fi
     if [[ ! -f /etc/mysql/my.cnf ]]; then
-        apt-get install --reinstall -y -qq mysql-server 2>/dev/null || true
+        quiet apt-get install --reinstall -y -qq mysql-server 2>/dev/null || true
     fi
     if [[ ! -f /etc/haproxy/haproxy.cfg ]]; then
         rm -f /etc/systemd/system/haproxy.service.d/override.conf 2>/dev/null || true
-        apt-get install --reinstall -y -qq haproxy 2>/dev/null || true
+        quiet apt-get install --reinstall -y -qq haproxy 2>/dev/null || true
     fi
     log "Dépendances installées"
 }
@@ -150,11 +156,14 @@ install_nodejs() {
     if command -v node &>/dev/null && [[ "$(node -v)" =~ ^v20 ]]; then
         log "Node.js $(node -v) déjà présent"
     else
-        curl -fsSL https://deb.nodesource.com/setup_20.x | bash - >/dev/null 2>&1
-        DEBIAN_FRONTEND=noninteractive apt-get install -y -qq nodejs 2>/dev/null
+        (curl -fsSL https://deb.nodesource.com/setup_20.x | bash - >/dev/null 2>&1) &
+        spinner $! "Ajout du dépôt NodeSource"
+        (DEBIAN_FRONTEND=noninteractive apt-get install -y -qq nodejs 2>/dev/null) &
+        spinner $! "Installation Node.js"
         log "Node.js $(node -v) installé"
     fi
-    npm install -g pm2 --quiet 2>/dev/null || true
+    (npm install -g pm2 --quiet 2>/dev/null || true) &
+    spinner $! "Installation PM2"
     log "PM2 $(pm2 -v 2>/dev/null || echo '?')"
 }
 
@@ -251,7 +260,8 @@ install_npm_panel() {
     step_header '📦  Modules Node.js  📦'
     pushd "$PANEL_DIR" >/dev/null || return 1
     if [[ ! -d node_modules ]]; then
-        NODE_OPTIONS="--dns-result-order=ipv4first" npm install --production --quiet 2>/dev/null || npm install --production --quiet 2>/dev/null || warn "npm install warnings"
+        (NODE_OPTIONS="--dns-result-order=ipv4first" npm install --production --quiet 2>/dev/null || npm install --production --quiet 2>/dev/null || warn "npm install warnings") &
+        spinner $! "Installation des modules npm"
         log "Modules installés"
     fi
     pm2 delete kighmu-panel 2>/dev/null || true
@@ -329,14 +339,16 @@ configure_nginx() {
             mkdir -p /etc/nginx/ssl
         else
             if ! command -v ~/.acme.sh/acme.sh &>/dev/null; then
-                curl -fsSL https://get.acme.sh | bash 2>/dev/null || true
+                (curl -fsSL https://get.acme.sh | bash 2>/dev/null) &
+                spinner $! "Installation acme.sh"
             fi
             # sshws bloque le port 80 → on l'arrête temporairement
             systemctl stop sshws 2>/dev/null || true
             local ACME_SH; ACME_SH=$(ls ~/.acme.sh/acme.sh 2>/dev/null || echo "/root/.acme.sh/acme.sh")
-            "$ACME_SH" --register-account -m admin@"$DOMAIN" 2>/dev/null || true
-            "$ACME_SH" --issue --standalone -d "$DOMAIN" --keylength ec-256 --force 2>/dev/null \
-                || "$ACME_SH" --issue --standalone -d "$DOMAIN" --keylength ec-256 --server letsencrypt 2>/dev/null || true
+            quiet "$ACME_SH" --register-account -m admin@"$DOMAIN"
+            ("$ACME_SH" --issue --standalone -d "$DOMAIN" --keylength ec-256 --force 2>/dev/null \
+                || "$ACME_SH" --issue --standalone -d "$DOMAIN" --keylength ec-256 --server letsencrypt 2>/dev/null) &
+            spinner $! "Obtention du certificat SSL"
         fi
         if [[ -f ~/.acme.sh/"${DOMAIN}"_ecc/fullchain.cer || -f "$ACME_CERT" ]]; then
             log "Certificat SSL présent pour $DOMAIN"
@@ -880,8 +892,9 @@ full_install() {
     # Télécharger les scripts compagnons s'ils sont absents
     for _script in ssh.sh xray-v2ray.sh udp.sh; do
         if [[ ! -f "$SCRIPT_DIR/$_script" ]]; then
-            log "Téléchargement de $_script depuis GitHub..."
-            if ! curl -fsSL "$GH/$_script" -o "$SCRIPT_DIR/$_script"; then
+            (curl -fsSL "$GH/$_script" -o "$SCRIPT_DIR/$_script") &
+            spinner $! "Téléchargement de $_script"
+            if [[ ! -f "$SCRIPT_DIR/$_script" ]]; then
                 err "Échec du téléchargement de $_script — installation annulée"
                 return 1
             fi
