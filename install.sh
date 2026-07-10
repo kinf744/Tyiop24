@@ -129,9 +129,12 @@ ask_nameservers() {
 # ── DÉPENDANCES (totalement silencieuses) ──
 install_system_deps() {
     step_header '📦  Dépendances Système  📦'
+    # Supprimer les hooks needrestart pour éviter les erreurs (ssl_tls, etc.)
+    export NEEDRESTART_MODE=a
+    export DEBIAN_FRONTEND=noninteractive
     (apt-get update -qq 2>/dev/null) &
     spinner $! "Mise à jour des paquets"
-    (DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+    (apt-get install -y -qq \
         curl wget jq openssl nftables iproute2 \
         xz-utils unzip zip sudo ufw \
         apt-transport-https gnupg lsb-release \
@@ -200,11 +203,26 @@ install_mysql() {
         useradd -r -s /usr/sbin/nologin -M mysql 2>/dev/null || true
         chown -R mysql:mysql /var/lib/mysql /var/run/mysqld 2>/dev/null || true
     fi
+    # S'assurer que les répertoires critiques appartiennent à mysql
+    chown -R mysql:mysql /var/lib/mysql /var/run/mysqld /var/log/mysql 2>/dev/null || true
     # Ajouter un override pour éviter le rate-limiting systemd
     mkdir -p /etc/systemd/system/mysql.service.d
     printf '[Service]\nRestart=always\nRestartSec=5\nStartLimitIntervalSec=0\nStartLimitBurst=0\n' > /etc/systemd/system/mysql.service.d/override.conf
     systemctl daemon-reload 2>/dev/null || true
+    # Tentatives de démarrage MySQL avec récupération
+    local _ms_attempt=0
     systemctl start mysql 2>/dev/null || true
+    while ! mysqladmin ping 2>/dev/null; do
+        _ms_attempt=$((_ms_attempt + 1))
+        if [[ $_ms_attempt -ge 12 ]]; then
+            warn "MySQL ne démarre pas — exécution mysql_upgrade..."
+            mysql_upgrade --force 2>/dev/null || true
+            systemctl start mysql 2>/dev/null || true
+            sleep 3
+            break
+        fi
+        sleep 5
+    done
     systemctl enable mysql 2>/dev/null || true
 
     DB_PASS=$(grep '^DB_PASSWORD=' "$PANEL_DIR/.env" 2>/dev/null | cut -d= -f2)
@@ -335,7 +353,7 @@ create_admin_user() {
         await conn.execute('INSERT INTO admins (username, password) VALUES (?,?) ON DUPLICATE KEY UPDATE password=VALUES(password)', ['$user', hash]);
         await conn.end();
     })();
-    " 2>&1 || warn "Admin SQL — vérifie MySQL"
+    " 2>>"$INSTALL_LOG" || { warn "Admin SQL — MySQL injoignable. Vérifie le log"; }
     popd >/dev/null 2>&1 || true
     echo
     echo -e "${BG}${CYAN}╔═══$(printf '═%.0s' {1..57})═══╗${RESET}"
