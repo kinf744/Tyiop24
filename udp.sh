@@ -382,6 +382,8 @@ Type=simple
 ExecStart=/usr/local/bin/badvpn-udpgw --listen-addr 127.0.0.1:$port --max-clients 2048
 Restart=always
 RestartSec=2
+StartLimitIntervalSec=0
+StartLimitBurst=0
 User=root
 LimitNOFILE=1048576
 [Install]

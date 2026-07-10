@@ -277,14 +277,16 @@ NoNewPrivileges=true
 ExecStart=/usr/local/bin/xray -config /etc/xray/config.json
 Restart=always
 RestartSec=5s
+StartLimitIntervalSec=0
+StartLimitBurst=0
 LimitNOFILE=1048576
 [Install]
 WantedBy=multi-user.target
 XSVCEOF
 
     mkdir -p /etc/systemd/system/nginx.service.d /etc/systemd/system/haproxy.service.d
-    printf '[Service]\nRestart=always\nStartLimitIntervalSec=0\n' > /etc/systemd/system/nginx.service.d/override.conf
-    printf '[Service]\nRestart=always\nStartLimitIntervalSec=0\n' > /etc/systemd/system/haproxy.service.d/override.conf
+    printf '[Service]\nRestart=always\nStartLimitIntervalSec=0\nStartLimitBurst=0\n' > /etc/systemd/system/nginx.service.d/override.conf
+    printf '[Service]\nRestart=always\nStartLimitIntervalSec=0\nStartLimitBurst=0\n' > /etc/systemd/system/haproxy.service.d/override.conf
 
     systemctl daemon-reload
     systemctl enable --now xray nginx haproxy 2>/dev/null || true
@@ -407,6 +409,8 @@ NoNewPrivileges=true
 ExecStart=/usr/local/bin/xray -config /etc/xray/config.json
 Restart=always
 RestartSec=5s
+StartLimitIntervalSec=0
+StartLimitBurst=0
 LimitNOFILE=1048576
 [Install]
 WantedBy=multi-user.target

@@ -92,6 +92,8 @@ Type=simple
 ExecStart=/usr/local/sbin/dropbear -F -E -p 109 -w -g -b /etc/dropbear/banner.txt -R
 Restart=always
 RestartSec=2
+StartLimitIntervalSec=0
+StartLimitBurst=0
 User=root
 LimitNOFILE=1048576
 [Install]
@@ -140,6 +142,8 @@ Type=simple
 ExecStart=/usr/local/bin/ssl_tls -listen 444 -target-host 127.0.0.1 -target-port 109
 Restart=always
 RestartSec=2
+StartLimitIntervalSec=0
+StartLimitBurst=0
 LimitNOFILE=1048576
 StandardOutput=journal
 StandardError=journal
@@ -185,6 +189,8 @@ Type=simple
 ExecStart=/usr/local/bin/sshws -listen 80 -target-host 127.0.0.1 -target-port 109
 Restart=always
 RestartSec=2
+StartLimitIntervalSec=0
+StartLimitBurst=0
 User=root
 LimitNOFILE=1048576
 [Install]
@@ -233,6 +239,7 @@ ExecStart=/usr/local/bin/proxy--ws
 Restart=always
 RestartSec=5
 StartLimitIntervalSec=0
+StartLimitBurst=0
 KillMode=process
 LimitNOFILE=1048576
 StandardOutput=append:/var/log/proxy--ws.log
@@ -277,6 +284,8 @@ User=root
 ExecStart=/usr/local/bin/ws2_proxy.py 9090
 Restart=always
 RestartSec=5
+StartLimitIntervalSec=0
+StartLimitBurst=0
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=sockspy
@@ -327,6 +336,8 @@ User=root
 ExecStart=/usr/bin/python3 /usr/local/bin/KIGHMUPROXY.py $PORT
 Restart=always
 RestartSec=5
+StartLimitIntervalSec=0
+StartLimitBurst=0
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=socks-python-proxy
@@ -781,6 +792,8 @@ User=root
 ExecStart=/usr/bin/python3 -O /usr/local/bin/ws-dropbear 2095
 Restart=always
 RestartSec=3s
+StartLimitIntervalSec=0
+StartLimitBurst=0
 LimitNOFILE=1048576
 [Install]
 WantedBy=multi-user.target
@@ -795,6 +808,8 @@ User=root
 ExecStart=/usr/bin/python3 -O /usr/local/bin/ws-stunnel 700
 Restart=always
 RestartSec=3s
+StartLimitIntervalSec=0
+StartLimitBurst=0
 LimitNOFILE=1048576
 [Install]
 WantedBy=multi-user.target
@@ -862,7 +877,7 @@ addAction(makeRule("${NV4_cfg}."), PoolAction("nv4"))
 addAction(AllRule(), RCodeAction(5))
 DNSDEOF
     mkdir -p /etc/systemd/system/dnsdist.service.d
-    printf '[Service]\nRestart=always\n' > /etc/systemd/system/dnsdist.service.d/restart.conf
+    printf '[Service]\nRestart=always\nStartLimitIntervalSec=0\nStartLimitBurst=0\n' > /etc/systemd/system/dnsdist.service.d/restart.conf
     systemctl daemon-reload; systemctl enable --now dnsdist 2>/dev/null || true
 
     command -v dnstt-server &>/dev/null && { warn "SlowDNS déjà installé"; pause; return; }
@@ -921,6 +936,8 @@ ExecStartPre=/bin/sleep 5
 ExecStart=/usr/local/bin/${svc}-start.sh
 Restart=always
 RestartSec=5
+StartLimitIntervalSec=0
+StartLimitBurst=0
 LimitNOFILE=1048576
 StandardOutput=append:/var/log/slowdns/${svc}.log
 StandardError=append:/var/log/slowdns/${svc}.log
