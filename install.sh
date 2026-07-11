@@ -363,7 +363,7 @@ create_admin_user() {
     echo -e "${BG}${CYAN}║${RESET}${TITLE_BG}$(center '🔐  ACCÈS PANEL ADMIN  🔐' 61)${RESET}${BG}${CYAN}║${RESET}"
     echo -e "${BG}${CYAN}╠═══$(printf '═%.0s' {1..57})═══╣${RESET}"
     echo -e "${BG}${CYAN}║${RESET}  ${LAV}URL IP   :${RESET} ${CYAN}http://$(hostname -I | awk '{print $1}'):8585/admin/${RESET}  ${BG}${CYAN}║${RESET}"
-    echo -e "${BG}${CYAN}║${RESET}  ${LAV}URL DOM  :${RESET} ${CYAN}https://$(cat /etc/kighmu/domain.txt 2>/dev/null)/admin/${RESET}  ${BG}${CYAN}║${RESET}"
+    echo -e "${BG}${CYAN}║${RESET}  ${LAV}URL DOM  :${RESET} ${CYAN}https://$(cat /etc/kighmu/domain.txt 2>/dev/null):8587/admin/${RESET}  ${BG}${CYAN}║${RESET}"
     echo -e "${BG}${CYAN}║${RESET}  ${LAV}Utilisateur :${RESET} ${WHITE}${user}${RESET}                        ${BG}${CYAN}║${RESET}"
     echo -e "${BG}${CYAN}║${RESET}  ${LAV}Mot de passe :${RESET} ${ORANGE}${pass}${RESET}                       ${BG}${CYAN}║${RESET}"
     echo -e "${BG}${CYAN}╚═══$(printf '═%.0s' {1..57})═══╝${RESET}"
