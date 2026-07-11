@@ -157,7 +157,7 @@ frontend grpc_router
     mode http
     timeout http-request 5s
     # Panel routes (H2 → HTTP/1.1 downgrade)
-    use_backend panel if { path / } or { path_beg /admin/ } or { path_beg /ws-dropbear } or { path_beg /ws-stunnel }
+    use_backend panel-http if { path / } or { path_beg /admin/ } or { path_beg /ws-dropbear } or { path_beg /ws-stunnel }
     # Xray routes
     use_backend xray-vmess-grpc   if { path_beg /vmess-grpc }
     use_backend xray-vless-grpc   if { path_beg /vless-grpc }
@@ -215,6 +215,11 @@ backend xray-trojan-grpc
 # Panel backend (via HAProxy TLS termination → Nginx internal)
 backend panel
     mode tcp
+    server nginx 127.0.0.1:8586
+
+# Panel HTTP backend for gRPC router (mode http)
+backend panel-http
+    mode http
     server nginx 127.0.0.1:8586
 HAPEOF
 }
