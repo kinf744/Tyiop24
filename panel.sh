@@ -153,6 +153,7 @@ app.use(nonceMiddleware);
 
 app.use(helmet({
   contentSecurityPolicy: {
+    useDefaults: false,
     directives: {
       defaultSrc: ["'self'"],
       scriptSrc: ["'self'", (req) => `'nonce-${req.nonce}'`, 'https://cdnjs.cloudflare.com', 'https://cdn.jsdelivr.net'],
