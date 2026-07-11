@@ -381,6 +381,14 @@ configure_nginx() {
     systemctl stop nginx 2>/dev/null || true
     rm -f /etc/nginx/sites-enabled/default 2>/dev/null || true
 
+    # Self-signed IP cert for direct HTTPS access (needed for HSTS-cached browsers)
+    mkdir -p /etc/nginx/ssl
+    local SERVER_IP; SERVER_IP=$(curl -4fsS https://api.ipify.org 2>/dev/null || hostname -I | awk '{print $1}')
+    if [[ ! -f /etc/nginx/ssl/ip.crt ]]; then
+        openssl req -x509 -newkey rsa:2048 -keyout /etc/nginx/ssl/ip.key -out /etc/nginx/ssl/ip.crt -nodes -days 3650 \
+            -subj "/CN=${SERVER_IP}" -addext "subjectAltName=IP:${SERVER_IP}" 2>/dev/null
+    fi
+
     if [[ "$DOMAIN" =~ \. ]] && ! [[ "$DOMAIN" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
         # ── Domaine réel → HTTPS avec acme.sh ──
         local ACME_CERT="/etc/nginx/ssl/${DOMAIN}.crt"
@@ -411,9 +419,15 @@ configure_nginx() {
             fi
             cat > /etc/nginx/sites-available/kighmu << 'NGXEOF'
 server {
-    listen 8585;
+    listen 8585 ssl;
     server_name _;
     client_max_body_size 32m;
+
+    ssl_certificate     /etc/nginx/ssl/ip.crt;
+    ssl_certificate_key /etc/nginx/ssl/ip.key;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256;
+    ssl_prefer_server_ciphers on;
 
     location / {
         proxy_pass http://127.0.0.1:3000;
@@ -532,10 +546,16 @@ NGXEOF
         else
             warn "acme.sh a échoué pour $DOMAIN — fallback HTTP"
             cat > /etc/nginx/sites-available/kighmu << 'NGXEOF'
-    server {
-    listen 8585;
+server {
+    listen 8585 ssl;
     server_name _;
     client_max_body_size 32m;
+
+    ssl_certificate     /etc/nginx/ssl/ip.crt;
+    ssl_certificate_key /etc/nginx/ssl/ip.key;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256;
+    ssl_prefer_server_ciphers on;
 
     location / {
         proxy_pass http://127.0.0.1:3000;
@@ -609,12 +629,18 @@ server {
 NGXEOF
         fi
     else
-        # ── IP uniquement → HTTP direct ──
+        # ── IP uniquement → HTTPS direct ──
         cat > /etc/nginx/sites-available/kighmu << 'NGXEOF'
 server {
-    listen 8585;
+    listen 8585 ssl;
     server_name _;
     client_max_body_size 32m;
+
+    ssl_certificate     /etc/nginx/ssl/ip.crt;
+    ssl_certificate_key /etc/nginx/ssl/ip.key;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256;
+    ssl_prefer_server_ciphers on;
 
     location / {
         proxy_pass http://127.0.0.1:3000;
