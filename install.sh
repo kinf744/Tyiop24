@@ -494,6 +494,7 @@ server {
     listen 8586;
     server_name 127.0.0.1;
     client_max_body_size 32m;
+    add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload" always;
 
     location / {
         proxy_pass http://127.0.0.1:3000;
@@ -572,6 +573,7 @@ server {
     listen 8586;
     server_name 127.0.0.1;
     client_max_body_size 32m;
+    add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload" always;
 
     location / {
         proxy_pass http://127.0.0.1:3000;
@@ -650,6 +652,7 @@ server {
     listen 8586;
     server_name 127.0.0.1;
     client_max_body_size 32m;
+    add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload" always;
 
     location / {
         proxy_pass http://127.0.0.1:3000;

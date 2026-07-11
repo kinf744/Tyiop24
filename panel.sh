@@ -169,7 +169,7 @@ app.use(helmet({
     }
   },
   referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
-  hsts: { maxAge: 63072000, preload: true, includeSubDomains: true },
+  hsts: false,
   noSniff: true,
   xssFilter: true,
 }));
