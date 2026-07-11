@@ -363,7 +363,7 @@ create_admin_user() {
     echo -e "${BG}${CYAN}║${RESET}${TITLE_BG}$(center '🔐  ACCÈS PANEL ADMIN  🔐' 61)${RESET}${BG}${CYAN}║${RESET}"
     echo -e "${BG}${CYAN}╠═══$(printf '═%.0s' {1..57})═══╣${RESET}"
     echo -e "${BG}${CYAN}║${RESET}  ${LAV}URL IP   :${RESET} ${CYAN}http://$(hostname -I | awk '{print $1}'):8585/admin/${RESET}  ${BG}${CYAN}║${RESET}"
-    echo -e "${BG}${CYAN}║${RESET}  ${LAV}URL DOM  :${RESET} ${CYAN}https://$(cat /etc/kighmu/domain.txt 2>/dev/null):8587/admin/${RESET}  ${BG}${CYAN}║${RESET}"
+    echo -e "${BG}${CYAN}║${RESET}  ${LAV}URL DOM  :${RESET} ${CYAN}https://$(cat /etc/kighmu/domain.txt 2>/dev/null)/admin/${RESET}  ${BG}${CYAN}║${RESET}"
     echo -e "${BG}${CYAN}║${RESET}  ${LAV}Utilisateur :${RESET} ${WHITE}${user}${RESET}                        ${BG}${CYAN}║${RESET}"
     echo -e "${BG}${CYAN}║${RESET}  ${LAV}Mot de passe :${RESET} ${ORANGE}${pass}${RESET}                       ${BG}${CYAN}║${RESET}"
     echo -e "${BG}${CYAN}╚═══$(printf '═%.0s' {1..57})═══╝${RESET}"
@@ -458,6 +458,43 @@ server {
         proxy_read_timeout 86400;
     }
 }
+
+server {
+    listen 8586;
+    server_name 127.0.0.1;
+    client_max_body_size 32m;
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_read_timeout 86400;
+    }
+
+    location /ws-dropbear {
+        proxy_pass http://127.0.0.1:2095;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_read_timeout 86400;
+    }
+
+    location /ws-stunnel {
+        proxy_pass http://127.0.0.1:700;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_read_timeout 86400;
+    }
+}
 NGXEOF
             sed -i "s/SSL_DOMAIN/$DOMAIN/g" /etc/nginx/sites-available/kighmu
         else
@@ -466,6 +503,43 @@ NGXEOF
     server {
     listen 8585;
     server_name _;
+    client_max_body_size 32m;
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_read_timeout 86400;
+    }
+
+    location /ws-dropbear {
+        proxy_pass http://127.0.0.1:2095;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_read_timeout 86400;
+    }
+
+    location /ws-stunnel {
+        proxy_pass http://127.0.0.1:700;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_read_timeout 86400;
+    }
+}
+
+server {
+    listen 8586;
+    server_name 127.0.0.1;
     client_max_body_size 32m;
 
     location / {
@@ -540,7 +614,48 @@ server {
         proxy_read_timeout 86400;
     }
 }
+
+server {
+    listen 8586;
+    server_name 127.0.0.1;
+    client_max_body_size 32m;
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_read_timeout 86400;
+    }
+
+    location /ws-dropbear {
+        proxy_pass http://127.0.0.1:2095;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_read_timeout 86400;
+    }
+
+    location /ws-stunnel {
+        proxy_pass http://127.0.0.1:700;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_read_timeout 86400;
+    }
+}
 NGXEOF
+    fi
+    if [[ -f /etc/nginx/ssl/${DOMAIN}.crt && -f /etc/nginx/ssl/${DOMAIN}.key ]]; then
+        mkdir -p /etc/haproxy
+        cat /etc/nginx/ssl/${DOMAIN}.crt /etc/nginx/ssl/${DOMAIN}.key > /etc/haproxy/panel.pem 2>/dev/null || true
     fi
     ln -sf /etc/nginx/sites-available/kighmu /etc/nginx/sites-enabled/
     nginx -t 2>/dev/null && systemctl start nginx && log "Nginx OK" || err "Nginx invalide"
@@ -595,7 +710,7 @@ KGHM
 table inet kighmu-panel {
     chain input {
         type filter hook input priority 0; policy accept;
-        tcp dport { 8585, 8587, 446 } accept
+        tcp dport { 8585, 8586, 8587, 446 } accept
     }
 }
 PNLEOF

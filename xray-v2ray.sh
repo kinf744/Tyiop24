@@ -127,9 +127,18 @@ frontend xray-ntls
 
 # TLS Frontend :443
 frontend xray-tls
-    bind *:443 ssl crt /etc/xray/xray.pem alpn h2,http/1.1
+    bind *:443 ssl crt /etc/xray/xray.pem crt /etc/haproxy/panel.pem alpn h2,http/1.1
     tcp-request inspect-delay 5s
     tcp-request content accept if { req.len ge 5 }
+    # Panel routes (HTTP/1.1 via payload path detection)
+    acl is_panel  req.payload(0,11) -m bin 474554202f61646d696e2f
+    acl is_panel2 req.payload(0,12) -m bin 504f5354202f61646d696e2f
+    acl is_panel3 req.payload(0,16) -m bin 474554202f77732d64726f7062656172
+    acl is_panel4 req.payload(0,13) -m bin 474554202f77732d7374756e6e656c
+    acl is_root1  req.payload(0,6) -m bin 474554202f20
+    acl is_root2  req.payload(0,7) -m bin 504f5354202f20
+    use_backend panel if is_panel or is_panel2 or is_panel3 or is_panel4 or is_root1 or is_root2
+    # Xray routes
     acl is_h2     req.payload(0,3) -m bin 505249
     acl is_http   req.payload(0,4) -m bin 474554202f
     acl is_post   req.payload(0,4) -m bin 504f5354
@@ -147,6 +156,9 @@ frontend grpc_router
     bind 127.0.0.1:9898
     mode http
     timeout http-request 5s
+    # Panel routes (H2 → HTTP/1.1 downgrade)
+    use_backend panel if { path / } or { path_beg /admin/ } or { path_beg /ws-dropbear } or { path_beg /ws-stunnel }
+    # Xray routes
     use_backend xray-vmess-grpc   if { path_beg /vmess-grpc }
     use_backend xray-vless-grpc   if { path_beg /vless-grpc }
     use_backend xray-trojan-grpc  if { path_beg /trojan-grpc }
@@ -199,6 +211,11 @@ backend xray-trojan-xhttp
 backend xray-trojan-grpc
     mode http
     server s1 127.0.0.1:10017
+
+# Panel backend (via HAProxy TLS termination → Nginx internal)
+backend panel
+    mode tcp
+    server nginx 127.0.0.1:8586
 HAPEOF
 }
 
