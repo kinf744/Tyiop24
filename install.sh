@@ -129,8 +129,8 @@ ask_nameservers() {
 # ── DÉPENDANCES (totalement silencieuses) ──
 install_system_deps() {
     step_header '📦  Dépendances Système  📦'
-    # Supprimer les hooks needrestart pour éviter les erreurs (ssl_tls, etc.)
-    export NEEDRESTART_MODE=a
+    # Suspendre needrestart pour éviter les erreurs (ssl_tls, etc.)
+    export NEEDRESTART_SUSPEND=1
     export DEBIAN_FRONTEND=noninteractive
     (apt-get update -qq 2>/dev/null) &
     spinner $! "Mise à jour des paquets"
