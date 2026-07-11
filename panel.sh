@@ -2860,7 +2860,7 @@ function renderTunnelResult(res) {
   // ────────────────────────────────────────────────────────────
   if (['vmess','vless','trojan'].includes(t)) {
     const proto     = t.toUpperCase();
-    const portTls   = 8443;
+    const portTls   = 443;
     const portNtls  = 8880;
     const pathMap   = { vmess:'/vmess', vless:'/vless', trojan:'/trojan' };
     const grpcMap   = { vmess:'vmess-grpc', vless:'vless-grpc', trojan:'trojan-grpc' };

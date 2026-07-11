@@ -125,9 +125,9 @@ frontend xray-ntls
     use_backend xray-vmess-tcp    if !is_vless
     default_backend xray-vless-tcp
 
-# TLS Frontend :8443
+# TLS Frontend :443
 frontend xray-tls
-    bind *:8443 ssl crt /etc/xray/xray.pem alpn h2,http/1.1
+    bind *:443 ssl crt /etc/xray/xray.pem alpn h2,http/1.1
     tcp-request inspect-delay 5s
     tcp-request content accept if { req.len ge 5 }
     acl is_h2     req.payload(0,3) -m bin 505249
@@ -298,7 +298,7 @@ XSVCEOF
     (crontab -l 2>/dev/null | grep -v xray-watchdog | crontab - 2>/dev/null || true)
     (crontab -l 2>/dev/null; echo "*/15 * * * * systemctl is-active --quiet xray || systemctl restart xray >> /var/log/xray-watchdog.log 2>&1"; echo "*/5 * * * * systemctl is-active --quiet haproxy || systemctl restart haproxy >> /var/log/haproxy-watchdog.log 2>&1") | crontab - 2>/dev/null || true
 
-    log "Xray installé: 8880 (NTLS), 8443 (TLS), 9898 (gRPC/XHTTP)"
+    log "Xray installé: 8880 (NTLS), 443 (TLS), 9898 (gRPC/XHTTP)"
     IP=$(hostname -I | awk '{print $1}')
     echo "   VMess/VLESS/Trojan/Shadowsocks disponibles"
     pause
@@ -370,9 +370,9 @@ add_xray_user() {
     local IP; IP=$(hostname -I | awk '{print $1}'); local DOM; DOM=$(cat "$XRAY_DOMAIN" 2>/dev/null || echo "$IP")
     echo "✅ $EMAIL ajouté"
     case $PROTO in
-        1) echo "   VMess: $ID | $DOM:8880/8443 | ws /vmess-ws ou /vmess-wss" ;;
-        2) echo "   VLESS: $ID | $DOM:8880/8443/9898 | ws/xhttp/grpc" ;;
-        3) echo "   Trojan: $PW | $DOM:8443" ;;
+        1) echo "   VMess: $ID | $DOM:8880/443 | ws /vmess-ws ou /vmess-wss" ;;
+        2) echo "   VLESS: $ID | $DOM:8880/443/9898 | ws/xhttp/grpc" ;;
+        3) echo "   Trojan: $PW | $DOM:443" ;;
         4) echo "   Shadowsocks: $PW@$DOM:8880 | chacha20-ietf-poly1305" ;;
     esac
     pause

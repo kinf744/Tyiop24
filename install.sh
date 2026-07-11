@@ -1036,7 +1036,7 @@ show_status() {
     done
     echo
     echo -e "${BG}  ${LAV}Ports ouverts :${RESET}"
-    ss -tlnp 2>/dev/null | grep -E '8585|8587|3000|80|443|8880|8443|109|22|444|9090|5667|20000|36712|5401|5353|5300|7100|7200|7300|2095|700' | awk '{print "  "$4}' | sort -u
+    ss -tlnp 2>/dev/null | grep -E '8585|8587|3000|80|443|8880|109|22|444|9090|5667|20000|36712|5401|5353|5300|7100|7200|7300|2095|700' | awk '{print "  "$4}' | sort -u
     pause
 }
 
@@ -1568,7 +1568,7 @@ menu_vmess() {
             4) clear; echo -e "${CYAN}━━ Renew ━━${RESET}"; read -rp "  Username: " u; read -rp "  Jours suppl.: " e; jq "(.vmess[] | select(.email | startswith(\"$u@\")) | .expire) = \"$(date -d "+${e}days" +%Y-%m-%d)\"" /etc/xray/users.json > /tmp/xu.json && mv /tmp/xu.json /etc/xray/users.json && sync_xray && echo -e "${GREEN}  ✓ Prolongé${RESET}"; pause;;
             5) clear; echo -e "${CYAN}━━ Trial 1j ━━${RESET}"; read -rp "  Username: " u; local id=$(gen_uuid); jq ".vmess += [{\"id\":\"$id\",\"email\":\"$u@${DOMAIN:-$IP}\",\"level\":0,\"expire\":\"$(date -d "+1day" +%Y-%m-%d)\",\"quota\":1}]" /etc/xray/users.json > /tmp/xu.json && mv /tmp/xu.json /etc/xray/users.json && sync_xray && echo -e "${GREEN}  ✅ Trial $u créé (24h, 1GB)${RESET}"; pause;;
             6) clear; echo -e "${CYAN}━━ Check expiry ━━${RESET}"; read -rp "  Username: " u; jq -r '.vmess[] | select(.email | startswith("'"$u"'@")) | "Expire: \(.expire) Quota: \(.quota // 0)GB"' /etc/xray/users.json 2>/dev/null || echo "  Introuvable"; pause;;
-            7) clear; echo -e "${CYAN}━━ Config VMESS ━━${RESET}"; read -rp "  Username: " u; jq -r '.vmess[] | select(.email | startswith("'"$u"'@")) | "  Serveur: '"${DOMAIN:-$IP}"':8443\n  UUID: \(.id)\n  Expire: \(.expire)\n  Quota: \(.quota // 0)GB"' /etc/xray/users.json 2>/dev/null || echo "  Introuvable"; pause;;
+            7) clear; echo -e "${CYAN}━━ Config VMESS ━━${RESET}"; read -rp "  Username: " u; jq -r '.vmess[] | select(.email | startswith("'"$u"'@")) | "  Serveur: '"${DOMAIN:-$IP}"':443\n  UUID: \(.id)\n  Expire: \(.expire)\n  Quota: \(.quota // 0)GB"' /etc/xray/users.json 2>/dev/null || echo "  Introuvable"; pause;;
             8) clear; echo -e "${CYAN}━━ Suppression expirés ━━${RESET}"; local t=$(date +%s); jq --arg t "$t" '.vmess |= map(select(.expire | strptime("%Y-%m-%d") | mktime > ($t|tonumber)))' /etc/xray/users.json > /tmp/xu.json && mv /tmp/xu.json /etc/xray/users.json && sync_xray && echo -e "${GREEN}  ✓ Nettoyé${RESET}"; pause;;
             9) show_xray_traffic "vmess" "VMESS" ;;
             0|q) break ;;
@@ -1594,7 +1594,7 @@ menu_vless() {
             4) clear; echo -e "${CYAN}━━ Renew ━━${RESET}"; read -rp "  Username: " u; read -rp "  Jours: " e; jq "(.vless[] | select(.email | startswith(\"$u@\")) | .expire) = \"$(date -d "+${e}days" +%Y-%m-%d)\"" /etc/xray/users.json > /tmp/xu.json && mv /tmp/xu.json /etc/xray/users.json && sync_xray && echo -e "${GREEN}  ✓ Prolongé${RESET}"; pause;;
             5) clear; echo -e "${CYAN}━━ Trial 1j ━━${RESET}"; read -rp "  Username: " u; local id=$(gen_uuid); jq ".vless += [{\"id\":\"$id\",\"email\":\"$u@${DOMAIN:-$IP}\",\"level\":0,\"expire\":\"$(date -d "+1day" +%Y-%m-%d)\",\"quota\":1}]" /etc/xray/users.json > /tmp/xu.json && mv /tmp/xu.json /etc/xray/users.json && sync_xray && echo -e "${GREEN}  ✅ Trial $u créé (24h, 1GB)${RESET}"; pause;;
             6) clear; echo -e "${CYAN}━━ Check ━━${RESET}"; read -rp "  Username: " u; jq -r '.vless[] | select(.email | startswith("'"$u"'@")) | "Expire: \(.expire) Quota: \(.quota // 0)GB"' /etc/xray/users.json 2>/dev/null || echo "  Introuvable"; pause;;
-            7) clear; echo -e "${CYAN}━━ Config ━━${RESET}"; read -rp "  Username: " u; jq -r '.vless[] | select(.email | startswith("'"$u"'@")) | "  Serveur: '"${DOMAIN:-$IP}"':8443 flow: xtls-rprx-vision\n  UUID: \(.id)\n  Expire: \(.expire)\n  Quota: \(.quota // 0)GB"' /etc/xray/users.json 2>/dev/null || echo "  Introuvable"; pause;;
+            7) clear; echo -e "${CYAN}━━ Config ━━${RESET}"; read -rp "  Username: " u; jq -r '.vless[] | select(.email | startswith("'"$u"'@")) | "  Serveur: '"${DOMAIN:-$IP}"':443 flow: xtls-rprx-vision\n  UUID: \(.id)\n  Expire: \(.expire)\n  Quota: \(.quota // 0)GB"' /etc/xray/users.json 2>/dev/null || echo "  Introuvable"; pause;;
             8) clear; echo -e "${CYAN}━━ Suppression expirés ━━${RESET}"; local t=$(date +%s); jq --arg t "$t" '.vless |= map(select(.expire | strptime("%Y-%m-%d") | mktime > ($t|tonumber)))' /etc/xray/users.json > /tmp/xu.json && mv /tmp/xu.json /etc/xray/users.json && sync_xray && echo -e "${GREEN}  ✓ Nettoyé${RESET}"; pause;;
             9) show_xray_traffic "vless" "VLESS" ;;
             0|q) break ;;
@@ -1619,7 +1619,7 @@ menu_trojan() {
             4) clear; echo -e "${CYAN}━━ Renew ━━${RESET}"; read -rp "  Username: " u; read -rp "  Jours: " e; jq "(.trojan[] | select(.email | startswith(\"$u@\")) | .expire) = \"$(date -d "+${e}days" +%Y-%m-%d)\"" /etc/xray/users.json > /tmp/xu.json && mv /tmp/xu.json /etc/xray/users.json && sync_xray && echo -e "${GREEN}  ✓ Prolongé${RESET}"; pause;;
             5) clear; echo -e "${CYAN}━━ Trial 1j ━━${RESET}"; read -rp "  Username: " u; read -rp "  Password: " p; jq ".trojan += [{\"password\":\"$p\",\"email\":\"$u@${DOMAIN:-$IP}\",\"level\":0,\"expire\":\"$(date -d "+1day" +%Y-%m-%d)\",\"quota\":1}]" /etc/xray/users.json > /tmp/xu.json && mv /tmp/xu.json /etc/xray/users.json && sync_xray && echo -e "${GREEN}  ✅ Trial $u créé (24h, 1GB)${RESET}"; pause;;
             6) clear; echo -e "${CYAN}━━ Check ━━${RESET}"; read -rp "  Username: " u; jq -r '.trojan[] | select(.email | startswith("'"$u"'@")) | "Expire: \(.expire) Quota: \(.quota // 0)GB"' /etc/xray/users.json 2>/dev/null || echo "  Introuvable"; pause;;
-            7) clear; echo -e "${CYAN}━━ Config ━━${RESET}"; read -rp "  Username: " u; jq -r '.trojan[] | select(.email | startswith("'"$u"'@")) | "  Serveur: '"${DOMAIN:-$IP}"':8443 security: tls\n  Password: \(.password)\n  Expire: \(.expire)\n  Quota: \(.quota // 0)GB"' /etc/xray/users.json 2>/dev/null || echo "  Introuvable"; pause;;
+            7) clear; echo -e "${CYAN}━━ Config ━━${RESET}"; read -rp "  Username: " u; jq -r '.trojan[] | select(.email | startswith("'"$u"'@")) | "  Serveur: '"${DOMAIN:-$IP}"':443 security: tls\n  Password: \(.password)\n  Expire: \(.expire)\n  Quota: \(.quota // 0)GB"' /etc/xray/users.json 2>/dev/null || echo "  Introuvable"; pause;;
             8) clear; echo -e "${CYAN}━━ Suppression expirés ━━${RESET}"; local t=$(date +%s); jq --arg t "$t" '.trojan |= map(select(.expire | strptime("%Y-%m-%d") | mktime > ($t|tonumber)))' /etc/xray/users.json > /tmp/xu.json && mv /tmp/xu.json /etc/xray/users.json && sync_xray && echo -e "${GREEN}  ✓ Nettoyé${RESET}"; pause;;
             9) show_xray_traffic "trojan" "TROJAN" ;;
             0|q) break ;;
@@ -1644,7 +1644,7 @@ menu_shadow() {
             4) clear; echo -e "${CYAN}━━ Renew ━━${RESET}"; read -rp "  Username: " u; read -rp "  Jours: " e; jq "(.shadow[] | select(.email | startswith(\"$u@\")) | .expire) = \"$(date -d "+${e}days" +%Y-%m-%d)\"" /etc/xray/users.json > /tmp/xu.json && mv /tmp/xu.json /etc/xray/users.json && sync_xray && echo -e "${GREEN}  ✓ Prolongé${RESET}"; pause;;
             5) clear; echo -e "${CYAN}━━ Trial ━━${RESET}"; read -rp "  Username: " u; read -rp "  Password: " p; jq ".shadow += [{\"password\":\"$p\",\"method\":\"aes-256-gcm\",\"email\":\"$u@${DOMAIN:-$IP}\",\"level\":0,\"expire\":\"$(date -d "+1day" +%Y-%m-%d)\",\"quota\":1}]" /etc/xray/users.json > /tmp/xu.json && mv /tmp/xu.json /etc/xray/users.json && sync_xray && echo -e "${GREEN}  ✅ Trial $u créé (24h, 1GB)${RESET}"; pause;;
             6) clear; echo -e "${CYAN}━━ Check ━━${RESET}"; read -rp "  Username: " u; jq -r '.shadow[] | select(.email | startswith("'"$u"'@")) | "Expire: \(.expire) Quota: \(.quota // 0)GB"' /etc/xray/users.json 2>/dev/null || echo "  Introuvable"; pause;;
-            7) clear; echo -e "${CYAN}━━ Config ━━${RESET}"; read -rp "  Username: " u; jq -r '.shadow[] | select(.email | startswith("'"$u"'@")) | "  Serveur: '"${DOMAIN:-$IP}"':8443 method: aes-256-gcm\n  Password: \(.password)\n  Expire: \(.expire)\n  Quota: \(.quota // 0)GB"' /etc/xray/users.json 2>/dev/null || echo "  Introuvable"; pause;;
+            7) clear; echo -e "${CYAN}━━ Config ━━${RESET}"; read -rp "  Username: " u; jq -r '.shadow[] | select(.email | startswith("'"$u"'@")) | "  Serveur: '"${DOMAIN:-$IP}"':443 method: aes-256-gcm\n  Password: \(.password)\n  Expire: \(.expire)\n  Quota: \(.quota // 0)GB"' /etc/xray/users.json 2>/dev/null || echo "  Introuvable"; pause;;
             8) clear; echo -e "${CYAN}━━ Suppression expirés ━━${RESET}"; local t=$(date +%s); jq --arg t "$t" '.shadow |= map(select(.expire | strptime("%Y-%m-%d") | mktime > ($t|tonumber)))' /etc/xray/users.json > /tmp/xu.json && mv /tmp/xu.json /etc/xray/users.json && sync_xray && echo -e "${GREEN}  ✓ Nettoyé${RESET}"; pause;;
             9) show_xray_traffic "shadow" "SHADOWSOCKS" ;;
             0|q) break ;;
@@ -1713,9 +1713,9 @@ show_vmess_config() {
   local user=$1 uuid=$2 exp=$3 quota=$4 d=${DOMAIN:-$IP}
   local ql="$quota Go"
   [ "$quota" = "0" ] && ql="0 Go"
-  local j1='{"v":"2","ps":"'"$user"'","add":"'"$d"'","port":"8443","id":"'"$uuid"'","aid":0,"net":"ws","type":"none","host":"'"$d"'","path":"/vmess","tls":"tls","sni":"'"$d"'"}'
+  local j1='{"v":"2","ps":"'"$user"'","add":"'"$d"'","port":"443","id":"'"$uuid"'","aid":0,"net":"ws","type":"none","host":"'"$d"'","path":"/vmess","tls":"tls","sni":"'"$d"'"}'
   local j2='{"v":"2","ps":"'"$user"'","add":"'"$d"'","port":"8880","id":"'"$uuid"'","aid":0,"net":"ws","type":"none","host":"'"$d"'","path":"/vmess","tls":"none"}'
-  local j3='{"v":"2","ps":"'"$user"'","add":"'"$d"'","port":"8443","id":"'"$uuid"'","aid":0,"net":"grpc","type":"none","host":"'"$d"'","path":"vmess-grpc","tls":"tls","sni":"'"$d"'"}'
+  local j3='{"v":"2","ps":"'"$user"'","add":"'"$d"'","port":"443","id":"'"$uuid"'","aid":0,"net":"grpc","type":"none","host":"'"$d"'","path":"vmess-grpc","tls":"tls","sni":"'"$d"'"}'
   echo -e "${BG}==============================${RESET}"
   echo -e "${BG}  ${WHITE}VMESS${RESET}${BG} – ${WHITE}$user${RESET}"
   echo -e "${BG}==============================${RESET}"
@@ -1750,13 +1750,13 @@ show_vless_config() {
   echo -e "${BG}  ${LAV}Limite${RESET}     ${CYAN}:${RESET} ${WHITE}$ql${RESET}"
   echo -e "${BG}  ${LAV}Expire${RESET}     ${CYAN}:${RESET} ${WHITE}$exp${RESET}"
   echo -e "${BG}●━━━━━━━━━━━━━━━━━━━ Liens ━━━━━━━━━━━━━━━━━━━●${RESET}"
-  echo -e "${BG}┃ ${GREEN}TLS WS${RESET}     ${CYAN}:${RESET} ${DIM}${base}:8443?security=tls&type=ws&path=/vless&host=$d&sni=$d${name}${RESET}"
+  echo -e "${BG}┃ ${GREEN}TLS WS${RESET}     ${CYAN}:${RESET} ${DIM}${base}:443?security=tls&type=ws&path=/vless&host=$d&sni=$d${name}${RESET}"
   echo -e "${BG}┃ ${GREEN}NTLS WS${RESET}    ${CYAN}:${RESET} ${DIM}${base}:8880?security=none&type=ws&path=/vless&host=$d${name}${RESET}"
-  echo -e "${BG}┃ ${GREEN}TLS XHTTP${RESET}  ${CYAN}:${RESET} ${DIM}${base}:8443?security=tls&type=xhttp&path=/vless-xhttp&host=$d&sni=$d${name}${RESET}"
-  echo -e "${BG}┃ ${GREEN}TLS HUpg${RESET}   ${CYAN}:${RESET} ${DIM}${base}:8443?security=tls&type=httpupgrade&path=/vless-hupgrade&host=$d&sni=$d${name}${RESET}"
-  echo -e "${BG}┃ ${GREEN}TLS gRPC${RESET}   ${CYAN}:${RESET} ${DIM}${base}:8443?mode=grpc&security=tls&type=grpc&serviceName=vless-grpc&sni=$d${name}${RESET}"
+  echo -e "${BG}┃ ${GREEN}TLS XHTTP${RESET}  ${CYAN}:${RESET} ${DIM}${base}:443?security=tls&type=xhttp&path=/vless-xhttp&host=$d&sni=$d${name}${RESET}"
+  echo -e "${BG}┃ ${GREEN}TLS HUpg${RESET}   ${CYAN}:${RESET} ${DIM}${base}:443?security=tls&type=httpupgrade&path=/vless-hupgrade&host=$d&sni=$d${name}${RESET}"
+  echo -e "${BG}┃ ${GREEN}TLS gRPC${RESET}   ${CYAN}:${RESET} ${DIM}${base}:443?mode=grpc&security=tls&type=grpc&serviceName=vless-grpc&sni=$d${name}${RESET}"
   echo -e "${BG}┃ ${GREEN}NTLS TCP${RESET}   ${CYAN}:${RESET} ${DIM}${base}:8880?security=none&type=tcp${name}${RESET}"
-  echo -e "${BG}┃ ${GREEN}TLS TCP${RESET}    ${CYAN}:${RESET} ${DIM}${base}:8443?security=tls&type=tcp&sni=$d${name}${RESET}"
+  echo -e "${BG}┃ ${GREEN}TLS TCP${RESET}    ${CYAN}:${RESET} ${DIM}${base}:443?security=tls&type=tcp&sni=$d${name}${RESET}"
   echo -e "${BG}●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●${RESET}"
 }
 
@@ -1777,12 +1777,12 @@ show_trojan_config() {
   echo -e "${BG}  ${LAV}Limite${RESET}     ${CYAN}:${RESET} ${WHITE}$ql${RESET}"
   echo -e "${BG}  ${LAV}Expire${RESET}     ${CYAN}:${RESET} ${WHITE}$exp${RESET}"
   echo -e "${BG}●━━━━━━━━━━━━━━━━━━━ Liens ━━━━━━━━━━━━━━━━━━━●${RESET}"
-  echo -e "${BG}┃ ${GREEN}TLS WS${RESET}     ${CYAN}:${RESET} ${DIM}${base}:8443?security=tls&type=ws&path=/trojan&host=$d&sni=$d${name}${RESET}"
+  echo -e "${BG}┃ ${GREEN}TLS WS${RESET}     ${CYAN}:${RESET} ${DIM}${base}:443?security=tls&type=ws&path=/trojan&host=$d&sni=$d${name}${RESET}"
   echo -e "${BG}┃ ${GREEN}NTLS WS${RESET}    ${CYAN}:${RESET} ${DIM}${base}:8880?security=none&type=ws&path=/trojan&host=$d${name}${RESET}"
-  echo -e "${BG}┃ ${GREEN}TLS XHTTP${RESET}  ${CYAN}:${RESET} ${DIM}${base}:8443?security=tls&type=xhttp&path=/trojan-xhttp&host=$d&sni=$d${name}${RESET}"
-  echo -e "${BG}┃ ${GREEN}TLS gRPC${RESET}   ${CYAN}:${RESET} ${DIM}${base}:8443?security=tls&type=grpc&serviceName=trojan-grpc&sni=$d${name}${RESET}"
+  echo -e "${BG}┃ ${GREEN}TLS XHTTP${RESET}  ${CYAN}:${RESET} ${DIM}${base}:443?security=tls&type=xhttp&path=/trojan-xhttp&host=$d&sni=$d${name}${RESET}"
+  echo -e "${BG}┃ ${GREEN}TLS gRPC${RESET}   ${CYAN}:${RESET} ${DIM}${base}:443?security=tls&type=grpc&serviceName=trojan-grpc&sni=$d${name}${RESET}"
   echo -e "${BG}┃ ${GREEN}NTLS TCP${RESET}   ${CYAN}:${RESET} ${DIM}${base}:8880?security=none&type=tcp${name}${RESET}"
-  echo -e "${BG}┃ ${GREEN}TLS TCP${RESET}    ${CYAN}:${RESET} ${DIM}${base}:8443?security=tls&type=tcp&sni=$d${name}${RESET}"
+  echo -e "${BG}┃ ${GREEN}TLS TCP${RESET}    ${CYAN}:${RESET} ${DIM}${base}:443?security=tls&type=tcp&sni=$d${name}${RESET}"
   echo -e "${BG}●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●${RESET}"
 }
 
@@ -1805,8 +1805,8 @@ show_shadow_config() {
   echo -e "${BG}  ${LAV}Expire${RESET}     ${CYAN}:${RESET} ${WHITE}$exp${RESET}"
   echo -e "${BG}●━━━━━━━━━━━━━━━━━━━ Liens ━━━━━━━━━━━━━━━━━━━●${RESET}"
   echo -e "${BG}┃ ${GREEN}NTLS WS${RESET}    ${CYAN}:${RESET} ${DIM}${base}:8880?plugin=v2ray-plugin;path=/shadow;host=$d${name}${RESET}"
-  echo -e "${BG}┃ ${GREEN}TLS WS${RESET}     ${CYAN}:${RESET} ${DIM}${base}:8443?plugin=v2ray-plugin;path=/shadow;host=$d;tls${name}${RESET}"
-  echo -e "${BG}┃ ${GREEN}TLS gRPC${RESET}   ${CYAN}:${RESET} ${DIM}${base}:8443?plugin=v2ray-plugin;mode=grpc;serviceName=shadow-grpc;tls${name}${RESET}"
+  echo -e "${BG}┃ ${GREEN}TLS WS${RESET}     ${CYAN}:${RESET} ${DIM}${base}:443?plugin=v2ray-plugin;path=/shadow;host=$d;tls${name}${RESET}"
+  echo -e "${BG}┃ ${GREEN}TLS gRPC${RESET}   ${CYAN}:${RESET} ${DIM}${base}:443?plugin=v2ray-plugin;mode=grpc;serviceName=shadow-grpc;tls${name}${RESET}"
   echo -e "${BG}●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━●${RESET}"
 }
 
@@ -1903,7 +1903,7 @@ menu_v2ray_dns() {
             4) clear; echo -e "${CYAN}━━ Renew ━━${RESET}"; read -rp "  Username: " u; read -rp "  Jours: " e; jq "(.vless[] | select(.email | startswith(\"$u@\")) | .expire) = \"$(date -d "+${e}days" +%Y-%m-%d)\"" /etc/v2ray/users.json > /tmp/v2u.json && mv /tmp/v2u.json /etc/v2ray/users.json && sync_v2ray && echo -e "${GREEN}  ✓ Prolongé${RESET}"; pause;;
             5) clear; echo -e "${CYAN}━━ Trial 1j ━━${RESET}"; read -rp "  Username: " u; local id=$(gen_uuid); jq ".vless += [{\"id\":\"$id\",\"email\":\"$u@${DOMAIN:-$IP}\",\"level\":0,\"expire\":\"$(date -d "+1day" +%Y-%m-%d)\",\"quota\":1}]" /etc/v2ray/users.json > /tmp/v2u.json && mv /tmp/v2u.json /etc/v2ray/users.json && sync_v2ray && echo -e "${GREEN}  ✅ Trial $u créé (24h, 1GB)${RESET}"; pause;;
             6) clear; echo -e "${CYAN}━━ Check ━━${RESET}"; read -rp "  Username: " u; jq -r '.vless[] | select(.email | startswith("'"$u"'@")) | "Expire: \(.expire) Quota: \(.quota // 0)GB"' /etc/v2ray/users.json 2>/dev/null || echo "  Introuvable"; pause;;
-            7) clear; echo -e "${CYAN}━━ Config ━━${RESET}"; read -rp "  Username: " u; jq -r '.vless[] | select(.email | startswith("'"$u"'@")) | "  Serveur: '"${DOMAIN:-$IP}"':8443 (V2Ray DNS)\n  UUID: \(.id)\n  Expire: \(.expire)\n  Quota: \(.quota // 0)GB"' /etc/v2ray/users.json 2>/dev/null || echo "  Introuvable"; pause;;
+            7) clear; echo -e "${CYAN}━━ Config ━━${RESET}"; read -rp "  Username: " u; jq -r '.vless[] | select(.email | startswith("'"$u"'@")) | "  Serveur: '"${DOMAIN:-$IP}"':443 (V2Ray DNS)\n  UUID: \(.id)\n  Expire: \(.expire)\n  Quota: \(.quota // 0)GB"' /etc/v2ray/users.json 2>/dev/null || echo "  Introuvable"; pause;;
             8) clear; echo -e "${CYAN}━━ Changer NS V2Ray ━━${RESET}"
                 echo -e "  ${LAV}Actuel:${RESET} ${MAG}$NV4${RESET}"
                 read -rp "  Nouveau NV4: " n
