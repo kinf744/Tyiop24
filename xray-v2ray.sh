@@ -64,22 +64,23 @@ xray_gen_config() {
   "log": { "loglevel": "warning", "access": "/var/log/xray/access.log", "error": "/var/log/xray/error.log" },
   "inbounds": [
     {"tag":"VMess-TCP","port":10001,"listen":"127.0.0.1","protocol":"vmess","settings":{"clients":[]},"streamSettings":{"network":"tcp","security":"none"}},
-    {"tag":"VMess-WS","port":10002,"listen":"127.0.0.1","protocol":"vmess","settings":{"clients":[]},"streamSettings":{"network":"ws","security":"none","wsSettings":{"path":"/vmess-ws"}}},
+    {"tag":"VMess-WS","port":10002,"listen":"127.0.0.1","protocol":"vmess","settings":{"clients":[]},"streamSettings":{"network":"ws","security":"none","wsSettings":{"path":"/vmess"}}},
     {"tag":"VMess-TLS","port":10003,"listen":"127.0.0.1","protocol":"vmess","settings":{"clients":[]},"streamSettings":{"network":"tcp","security":"none"}},
-    {"tag":"VMess-WSS","port":10004,"listen":"127.0.0.1","protocol":"vmess","settings":{"clients":[]},"streamSettings":{"network":"ws","security":"none","wsSettings":{"path":"/vmess-ws"}}},
+    {"tag":"VMess-WSS","port":10004,"listen":"127.0.0.1","protocol":"vmess","settings":{"clients":[]},"streamSettings":{"network":"ws","security":"none","wsSettings":{"path":"/vmess"}}},
     {"tag":"VLESS-TCP","port":10005,"listen":"127.0.0.1","protocol":"vless","settings":{"clients":[],"decryption":"none"},"streamSettings":{"network":"tcp","security":"none"}},
-    {"tag":"VLESS-WS","port":10006,"listen":"127.0.0.1","protocol":"vless","settings":{"clients":[],"decryption":"none"},"streamSettings":{"network":"ws","security":"none","wsSettings":{"path":"/vless-ws"}}},
+    {"tag":"VLESS-WS","port":10006,"listen":"127.0.0.1","protocol":"vless","settings":{"clients":[],"decryption":"none"},"streamSettings":{"network":"ws","security":"none","wsSettings":{"path":"/vless"}}},
     {"tag":"VLESS-TLS","port":10007,"listen":"127.0.0.1","protocol":"vless","settings":{"clients":[],"decryption":"none"},"streamSettings":{"network":"tcp","security":"none"}},
-    {"tag":"VLESS-WSS","port":10008,"listen":"127.0.0.1","protocol":"vless","settings":{"clients":[],"decryption":"none"},"streamSettings":{"network":"ws","security":"none","wsSettings":{"path":"/vless-ws"}}},
+    {"tag":"VLESS-WSS","port":10008,"listen":"127.0.0.1","protocol":"vless","settings":{"clients":[],"decryption":"none"},"streamSettings":{"network":"ws","security":"none","wsSettings":{"path":"/vless"}}},
     {"tag":"Trojan-TCP","port":10009,"listen":"127.0.0.1","protocol":"trojan","settings":{"clients":[]},"streamSettings":{"network":"tcp","security":"none"}},
-    {"tag":"Trojan-WS","port":10010,"listen":"127.0.0.1","protocol":"trojan","settings":{"clients":[]},"streamSettings":{"network":"ws","security":"none","wsSettings":{"path":"/trojan-ws"}}},
+    {"tag":"Trojan-WS","port":10010,"listen":"127.0.0.1","protocol":"trojan","settings":{"clients":[]},"streamSettings":{"network":"ws","security":"none","wsSettings":{"path":"/trojan"}}},
     {"tag":"Shadowsocks","port":10011,"listen":"127.0.0.1","protocol":"shadowsocks","settings":{"clients":[],"network":"tcp,udp"},"streamSettings":{"network":"tcp","security":"none"}},
     {"tag":"VLESS-XHTTP","port":10012,"listen":"127.0.0.1","protocol":"vless","settings":{"clients":[],"decryption":"none"},"streamSettings":{"network":"xhttp","security":"none","xhttpSettings":{"path":"/vless-xhttp"}}},
     {"tag":"VLESS-gRPC","port":10013,"listen":"127.0.0.1","protocol":"vless","settings":{"clients":[],"decryption":"none"},"streamSettings":{"network":"grpc","security":"none","grpcSettings":{"serviceName":"vless-grpc"}}},
     {"tag":"VMess-XHTTP","port":10014,"listen":"127.0.0.1","protocol":"vmess","settings":{"clients":[]},"streamSettings":{"network":"xhttp","security":"none","xhttpSettings":{"path":"/vmess-xhttp"}}},
     {"tag":"VMess-gRPC","port":10015,"listen":"127.0.0.1","protocol":"vmess","settings":{"clients":[]},"streamSettings":{"network":"grpc","security":"none","grpcSettings":{"serviceName":"vmess-grpc"}}},
     {"tag":"Trojan-XHTTP","port":10016,"listen":"127.0.0.1","protocol":"trojan","settings":{"clients":[]},"streamSettings":{"network":"xhttp","security":"none","xhttpSettings":{"path":"/trojan-xhttp"}}},
-    {"tag":"Trojan-gRPC","port":10017,"listen":"127.0.0.1","protocol":"trojan","settings":{"clients":[]},"streamSettings":{"network":"grpc","security":"none","grpcSettings":{"serviceName":"trojan-grpc"}}}
+    {"tag":"Trojan-gRPC","port":10017,"listen":"127.0.0.1","protocol":"trojan","settings":{"clients":[]},"streamSettings":{"network":"grpc","security":"none","grpcSettings":{"serviceName":"trojan-grpc"}}},
+    {"tag":"VLESS-HUpgrade","port":10018,"listen":"127.0.0.1","protocol":"vless","settings":{"clients":[],"decryption":"none"},"streamSettings":{"network":"httpupgrade","security":"none","httpupgradeSettings":{"path":"/vless-hupgrade"}}}
   ],
   "outbounds": [{"tag":"direct","protocol":"freedom","settings":{}}],
   "stats": {},
@@ -121,8 +122,8 @@ frontend xray-ntls
     acl is_post       req.payload(0,4) -m bin 504f5354
     acl is_vless      req.payload(0,1) -m bin 00
     acl is_vless_ws   req.payload(0,11) -m bin 474554202f766c65737320
-    acl is_vmess_ws   req.payload(0,15) -m bin 474554202f766d6573732d7773
-    acl is_trojan_ws  req.payload(0,16) -m bin 474554202f74726f6a616e2d7773
+    acl is_vmess_ws   req.payload(0,12) -m bin 474554202f766d65737320
+    acl is_trojan_ws  req.payload(0,13) -m bin 474554202f74726f6a616e20
     use_backend grpc_router        if is_h2
     use_backend xray-vless-ws      if is_vless_ws
     use_backend xray-vmess-ws      if is_vmess_ws
@@ -150,8 +151,8 @@ frontend xray-tls
     acl is_post       req.payload(0,4) -m bin 504f5354
     acl is_vless      req.payload(0,1) -m bin 00
     acl is_vless_ws   req.payload(0,11) -m bin 474554202f766c65737320
-    acl is_vmess_ws   req.payload(0,15) -m bin 474554202f766d6573732d7773
-    acl is_trojan_ws  req.payload(0,16) -m bin 474554202f74726f6a616e2d7773
+    acl is_vmess_ws   req.payload(0,12) -m bin 474554202f766d65737320
+    acl is_trojan_ws  req.payload(0,13) -m bin 474554202f74726f6a616e20
     use_backend grpc_router        if is_h2
     use_backend xray-vless-ws      if is_vless_ws
     use_backend xray-vmess-ws      if is_vmess_ws
@@ -178,7 +179,7 @@ frontend grpc_router
     use_backend xray-vmess-xhttp  if { path_beg /vmess-xhttp }
     use_backend xray-vless-xhttp  if { path_beg /vless-xhttp }
     use_backend xray-trojan-xhttp if { path_beg /trojan-xhttp }
-    use_backend xray-vless-xhttp  if { path_beg /vless-hupgrade }
+    use_backend xray-vless-hupgrade  if { path_beg /vless-hupgrade }
     default_backend xray-vless-grpc
 
 backend grpc_router
@@ -219,6 +220,9 @@ backend xray-trojan-xhttp
 backend xray-trojan-grpc
     mode http
     server s1 127.0.0.1:10017
+backend xray-vless-hupgrade
+    mode http
+    server s1 127.0.0.1:10018
 
 # Panel backend (via HAProxy TLS termination → Nginx internal)
 backend panel
