@@ -169,6 +169,9 @@ frontend grpc_router
     # Panel routes (H2 → HTTP/1.1 downgrade)
     use_backend panel-http if { path / } or { path_beg /admin/ } or { path_beg /ws-dropbear } or { path_beg /ws-stunnel }
     # Xray routes
+    use_backend xray-vmess-ws     if { path_beg /vmess-ws }
+    use_backend xray-vless-ws     if { path /vless }
+    use_backend xray-trojan-ws    if { path_beg /trojan-ws }
     use_backend xray-vmess-grpc   if { path_beg /vmess-grpc }
     use_backend xray-vless-grpc   if { path_beg /vless-grpc }
     use_backend xray-trojan-grpc  if { path_beg /trojan-grpc }
