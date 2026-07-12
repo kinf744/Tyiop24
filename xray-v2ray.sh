@@ -108,21 +108,27 @@ defaults
     timeout connect 5s
     timeout client 86400s
     timeout server 86400s
+    timeout tunnel 86400s
     retries 3
 
 # NTLS (Non-TLS) frontend :8880
 frontend xray-ntls
     bind *:8880
     tcp-request inspect-delay 5s
-    tcp-request content accept if { req.len ge 5 }
-    acl is_h2     req.payload(0,3) -m bin 505249
-    acl is_http   req.payload(0,4) -m bin 474554202f
-    acl is_post   req.payload(0,4) -m bin 504f5354
-    acl is_vless  req.payload(0,1) -m bin 00
-    use_backend grpc_router       if is_h2
-    use_backend xray-vmess-ws     if is_http or is_post
-    use_backend xray-vless-ws     if is_http or is_post
-    use_backend xray-vmess-tcp    if !is_vless
+    tcp-request content accept if { req.len ge 21 }
+    acl is_h2         req.payload(0,3) -m bin 505249
+    acl is_http       req.payload(0,4) -m bin 474554202f
+    acl is_post       req.payload(0,4) -m bin 504f5354
+    acl is_vless      req.payload(0,1) -m bin 00
+    acl is_vless_ws   req.payload(0,11) -m bin 474554202f766c65737320
+    acl is_vmess_ws   req.payload(0,15) -m bin 474554202f766d6573732d7773
+    acl is_trojan_ws  req.payload(0,16) -m bin 474554202f74726f6a616e2d7773
+    use_backend grpc_router        if is_h2
+    use_backend xray-vless-ws      if is_vless_ws
+    use_backend xray-vmess-ws      if is_vmess_ws
+    use_backend xray-trojan-ws     if is_trojan_ws
+    use_backend grpc_router        if is_http or is_post
+    use_backend xray-vmess-tcp     if !is_vless
     default_backend xray-vless-tcp
 
 # TLS Frontend :443
@@ -139,16 +145,20 @@ frontend xray-tls
     acl is_root2  req.payload(0,7) -m bin 504f5354202f20
     use_backend panel if is_panel or is_panel2 or is_panel3 or is_panel4 or is_root1 or is_root2
     # Xray routes (HAProxy terminates TLS → forward unencrypted to Xray)
-    acl is_h2     req.payload(0,3) -m bin 505249
-    acl is_http   req.payload(0,4) -m bin 474554202f
-    acl is_post   req.payload(0,4) -m bin 504f5354
-    acl is_vless  req.payload(0,1) -m bin 00
-    use_backend grpc_router       if is_h2
-    use_backend xray-vmess-ws     if is_http or is_post
-    use_backend xray-vless-ws     if is_http or is_post
-    use_backend xray-trojan-ws    if is_http or is_post
-    use_backend xray-vmess-tcp    if !is_vless
-    use_backend xray-trojan-tcp   if !is_vless
+    acl is_h2         req.payload(0,3) -m bin 505249
+    acl is_http       req.payload(0,4) -m bin 474554202f
+    acl is_post       req.payload(0,4) -m bin 504f5354
+    acl is_vless      req.payload(0,1) -m bin 00
+    acl is_vless_ws   req.payload(0,11) -m bin 474554202f766c65737320
+    acl is_vmess_ws   req.payload(0,15) -m bin 474554202f766d6573732d7773
+    acl is_trojan_ws  req.payload(0,16) -m bin 474554202f74726f6a616e2d7773
+    use_backend grpc_router        if is_h2
+    use_backend xray-vless-ws      if is_vless_ws
+    use_backend xray-vmess-ws      if is_vmess_ws
+    use_backend xray-trojan-ws     if is_trojan_ws
+    use_backend grpc_router        if is_http or is_post
+    use_backend xray-vmess-tcp     if !is_vless
+    use_backend xray-trojan-tcp    if !is_vless
     default_backend xray-vless-tcp
 
 # Routeur gRPC/XHTTP interne (mode http)
@@ -162,9 +172,13 @@ frontend grpc_router
     use_backend xray-vmess-grpc   if { path_beg /vmess-grpc }
     use_backend xray-vless-grpc   if { path_beg /vless-grpc }
     use_backend xray-trojan-grpc  if { path_beg /trojan-grpc }
+    use_backend xray-vmess-grpc   if { path_beg /vmess-h2 }
+    use_backend xray-vless-grpc   if { path_beg /vless-h2 }
+    use_backend xray-trojan-grpc  if { path_beg /trojan-h2 }
     use_backend xray-vmess-xhttp  if { path_beg /vmess-xhttp }
     use_backend xray-vless-xhttp  if { path_beg /vless-xhttp }
     use_backend xray-trojan-xhttp if { path_beg /trojan-xhttp }
+    use_backend xray-vless-xhttp  if { path_beg /vless-hupgrade }
     default_backend xray-vless-grpc
 
 backend grpc_router
@@ -174,16 +188,19 @@ backend grpc_router
 backend xray-vmess-tcp
     server s1 127.0.0.1:10001
 backend xray-vmess-ws
+    mode http
     server s1 127.0.0.1:10002
 backend xray-vless-tcp
     server s1 127.0.0.1:10005
 backend xray-vless-ws
+    mode http
     server s1 127.0.0.1:10006
 backend xray-vless-tls
     server s1 127.0.0.1:10007
 backend xray-trojan-tcp
     server s1 127.0.0.1:10009
 backend xray-trojan-ws
+    mode http
     server s1 127.0.0.1:10010
 backend xray-ss
     server s1 127.0.0.1:10011
