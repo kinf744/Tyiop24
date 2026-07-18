@@ -1364,6 +1364,7 @@ app.post('/api/admin/clients', A, authWriteLimiter, async (req, res) => {
     const uuid = uuidv4();
     const pass = password || crypto.randomBytes(12).toString('base64url').slice(0, 16);
     const tunnelResult = await addTunnel({ username, password: pass, uuid, tunnel_type, expires_at });
+    if (!tunnelResult.ok) throw new Error(tunnelResult.msg || 'Échec de la configuration du tunnel');
     const [ins] = await db.query(
       'INSERT INTO clients (username,password,uuid,reseller_id,tunnel_type,expires_at,note,data_limit_gb) VALUES (?,?,?,?,?,?,?,?)',
       [username, pass, uuid, reseller_id||null, tunnel_type, expires_at, note||null, data_limit_gb||0]);
@@ -1572,6 +1573,7 @@ app.post('/api/reseller/clients', R, authWriteLimiter, async (req, res) => {
     const uuid = uuidv4();
     const pass = password || crypto.randomBytes(12).toString('base64url').slice(0, 16);
     const tunnelResult = await addTunnel({ username, password: pass, uuid, tunnel_type, expires_at });
+    if (!tunnelResult.ok) throw new Error(tunnelResult.msg || 'Échec de la configuration du tunnel');
     const [ins] = await db.query(
       'INSERT INTO clients (username,password,uuid,reseller_id,tunnel_type,expires_at,note,data_limit_gb) VALUES (?,?,?,?,?,?,?,?)',
       [username, pass, uuid, req.user.id, tunnel_type, expires_at, note||null, data_limit_gb||0]);
