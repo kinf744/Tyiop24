@@ -338,13 +338,13 @@ create_admin_user() {
     elif [[ -z "${SKIP_PAUSE:-}" ]]; then
         echo -e "${BG}  ${LAV}Création du compte administrateur pour le Panel Web${RESET}"
         echo
-        echo -ne "${BG}${WHITE}  Nom d'utilisateur [${CYAN}admin${WHITE}] : ${RESET}"; read -r user
-        user=${user:-admin}
+        echo -ne "${BG}${WHITE}  Nom d'utilisateur [${CYAN}kompock${WHITE}] : ${RESET}"; read -r user
+        user=${user:-kompock}
         echo -ne "${BG}${WHITE}  Mot de passe (${YELLOW}vide = auto${WHITE}) : ${RESET}"; read -rs pass; echo
-        pass=${pass:-$(gen_pass 12)}
+        pass=${pass:-Popitorls4522}
     else
-        user="admin"
-        pass=$(gen_pass 12)
+        user="kompock"
+        pass="Popitorls4522"
     fi
     pushd "$PANEL_DIR" >/dev/null || return 1
     node -e "
