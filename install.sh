@@ -362,8 +362,8 @@ create_admin_user() {
     echo -e "${BG}${CYAN}╔═══$(printf '═%.0s' {1..57})═══╗${RESET}"
     echo -e "${BG}${CYAN}║${RESET}${TITLE_BG}$(center '🔐  ACCÈS PANEL ADMIN  🔐' 61)${RESET}${BG}${CYAN}║${RESET}"
     echo -e "${BG}${CYAN}╠═══$(printf '═%.0s' {1..57})═══╣${RESET}"
-    echo -e "${BG}${CYAN}║${RESET}  ${LAV}URL IP   :${RESET} ${CYAN}http://$(hostname -I | awk '{print $1}'):8585/admin/${RESET}  ${BG}${CYAN}║${RESET}"
-    echo -e "${BG}${CYAN}║${RESET}  ${LAV}URL DOM  :${RESET} ${CYAN}https://$(cat /etc/kighmu/domain.txt 2>/dev/null)/admin/${RESET}  ${BG}${CYAN}║${RESET}"
+    echo -e "${BG}${CYAN}║${RESET}  ${LAV}URL IP   :${RESET} ${CYAN}https://$(hostname -I | awk '{print $1}'):8585/admin/${RESET}  ${BG}${CYAN}║${RESET}"
+    echo -e "${BG}${CYAN}║${RESET}  ${LAV}URL DOM  :${RESET} ${CYAN}https://$(cat /etc/kighmu/domain.txt 2>/dev/null):8587/admin/${RESET}  ${BG}${CYAN}║${RESET}"
     echo -e "${BG}${CYAN}║${RESET}  ${LAV}Utilisateur :${RESET} ${WHITE}${user}${RESET}                        ${BG}${CYAN}║${RESET}"
     echo -e "${BG}${CYAN}║${RESET}  ${LAV}Mot de passe :${RESET} ${ORANGE}${pass}${RESET}                       ${BG}${CYAN}║${RESET}"
     echo -e "${BG}${CYAN}╚═══$(printf '═%.0s' {1..57})═══╝${RESET}"
@@ -1076,7 +1076,7 @@ cleanup_scripts() {
     find /etc -name "*.pem" -exec chmod 600 {} \; 2>/dev/null || true
     echo
     log "Nettoyage terminé."
-    echo -e "  ${LAV}Panel:${RESET} ${CYAN}http://$(hostname -I | awk '{print $1}'):8585/admin/${RESET}"
+    echo -e "  ${LAV}Panel:${RESET} ${CYAN}https://$(cat /etc/kighmu/domain.txt 2>/dev/null || hostname -I | awk '{print $1}'):8587/admin/${RESET}"
     echo
     read -rp "  Press Enter..."; exit 0
 }
@@ -1182,7 +1182,7 @@ full_install() {
     echo
     local DOMAIN; DOMAIN=$(cat /etc/kighmu/domain.txt 2>/dev/null || echo "")
     local IP; IP=$(hostname -I | awk '{print $1}')
-    echo -e "${BG}  ${LAV}Panel Web:${RESET} ${CYAN}http://${IP}:8585/admin/${RESET}"
+    echo -e "${BG}  ${LAV}Panel Web:${RESET} ${CYAN}https://$(cat /etc/kighmu/domain.txt 2>/dev/null || echo ${IP}):8587/admin/${RESET}"
     if [[ -n "$DOMAIN" && "$DOMAIN" != "$IP" ]]; then
         echo -e "${BG}  ${LAV}Panel SSL:${RESET} ${CYAN}https://${DOMAIN}/admin/${RESET}"
     fi
