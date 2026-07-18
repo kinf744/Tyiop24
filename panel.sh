@@ -1363,11 +1363,11 @@ app.post('/api/admin/clients', A, authWriteLimiter, async (req, res) => {
     }
     const uuid = uuidv4();
     const pass = password || crypto.randomBytes(12).toString('base64url').slice(0, 16);
+    const tunnelResult = await addTunnel({ username, password: pass, uuid, tunnel_type, expires_at });
     const [ins] = await db.query(
       'INSERT INTO clients (username,password,uuid,reseller_id,tunnel_type,expires_at,note,data_limit_gb) VALUES (?,?,?,?,?,?,?,?)',
       [username, pass, uuid, reseller_id||null, tunnel_type, expires_at, note||null, data_limit_gb||0]);
     if (reseller_id) await db.query('UPDATE resellers SET used_users=used_users+1 WHERE id=?', [reseller_id]);
-    const tunnelResult = await addTunnel({ username, password: pass, uuid, tunnel_type, expires_at });
     await log('admin', req.user.id, 'CREATE_CLIENT', 'client', ins.insertId, { username, tunnel_type, data_limit_gb }, req.ip);
     const readF = p => { try { return fs.readFileSync(p,'utf8').trim(); } catch { return null; } };
     const vpsInfo = {
@@ -1571,11 +1571,11 @@ app.post('/api/reseller/clients', R, authWriteLimiter, async (req, res) => {
     if (ex.length) return res.status(409).json({ error: 'Username déjà utilisé' });
     const uuid = uuidv4();
     const pass = password || crypto.randomBytes(12).toString('base64url').slice(0, 16);
+    const tunnelResult = await addTunnel({ username, password: pass, uuid, tunnel_type, expires_at });
     const [ins] = await db.query(
       'INSERT INTO clients (username,password,uuid,reseller_id,tunnel_type,expires_at,note,data_limit_gb) VALUES (?,?,?,?,?,?,?,?)',
       [username, pass, uuid, req.user.id, tunnel_type, expires_at, note||null, data_limit_gb||0]);
     await db.query('UPDATE resellers SET used_users=used_users+1 WHERE id=?', [req.user.id]);
-    const tunnelResult = await addTunnel({ username, password: pass, uuid, tunnel_type, expires_at });
     await log('reseller', req.user.id, 'CREATE_CLIENT', 'client', ins.insertId, { username, tunnel_type }, req.ip);
     // Même vpsInfo que la route admin — nécessaire pour afficher le domaine côté revendeur
     const readF = p => { try { return fs.readFileSync(p,'utf8').trim(); } catch { return null; } };
