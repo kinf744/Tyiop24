@@ -2093,8 +2093,8 @@ NV4EOF
                     chmod +x /usr/local/bin/slowdns-nv4-start.sh
                     systemctl restart slowdns-nv4 2>/dev/null || true
                     # Mettre à jour slowdns-router
-                    local NS4_cur=\$(cat /etc/slowdns/ns.conf 2>/dev/null)
-                    sed -i "s|Environment=ROUTES=.*|Environment=ROUTES=\${NS4_cur}=127.0.0.1:5353,\${n}=127.0.0.1:5354|" /etc/systemd/system/slowdns-router.service
+                    local NS4_cur=$(cat /etc/slowdns/ns.conf 2>/dev/null)
+                    sed -i "s|Environment=ROUTES=.*|Environment=ROUTES=${NS4_cur}=127.0.0.1:5353,${n}=127.0.0.1:5354|" /etc/systemd/system/slowdns-router.service
                     systemctl daemon-reload && systemctl restart slowdns-router 2>/dev/null || true
                     echo -e "${GREEN}  ✓ NV4 mis à jour: ${MAG}$n${RESET} (services redémarrés)${RESET}"
                 fi; pause;;
@@ -2387,8 +2387,8 @@ NS4EOF
                     chmod +x /usr/local/bin/slowdns-ns4-start.sh
                     systemctl restart slowdns-ns4 2>/dev/null || true
                     # Mettre à jour slowdns-router
-                    local NV4_cur=\$(cat /etc/slowdns/nv4/ns.conf 2>/dev/null)
-                    sed -i "s|Environment=ROUTES=.*|Environment=ROUTES=\${ns4}=127.0.0.1:5353,\${NV4_cur}=127.0.0.1:5354|" /etc/systemd/system/slowdns-router.service
+                    local NV4_cur=$(cat /etc/slowdns/nv4/ns.conf 2>/dev/null)
+                    sed -i "s|Environment=ROUTES=.*|Environment=ROUTES=${ns4}=127.0.0.1:5353,${NV4_cur}=127.0.0.1:5354|" /etc/systemd/system/slowdns-router.service
                     systemctl daemon-reload && systemctl restart slowdns-router 2>/dev/null || true
                     echo -e "${GREEN}  ✓ NS SlowDNS mis à jour: ${MAG}$ns4${RESET} (services redémarrés)${RESET}"
                 fi; pause;;
@@ -2406,8 +2406,8 @@ NV4EOF
                     chmod +x /usr/local/bin/slowdns-nv4-start.sh
                     systemctl restart slowdns-nv4 2>/dev/null || true
                     # Mettre à jour slowdns-router
-                    local NS4_cur=\$(cat /etc/slowdns/ns.conf 2>/dev/null)
-                    sed -i "s|Environment=ROUTES=.*|Environment=ROUTES=\${NS4_cur}=127.0.0.1:5353,\${nv4}=127.0.0.1:5354|" /etc/systemd/system/slowdns-router.service
+                    local NS4_cur=$(cat /etc/slowdns/ns.conf 2>/dev/null)
+                    sed -i "s|Environment=ROUTES=.*|Environment=ROUTES=${NS4_cur}=127.0.0.1:5353,${nv4}=127.0.0.1:5354|" /etc/systemd/system/slowdns-router.service
                     systemctl daemon-reload && systemctl restart slowdns-router 2>/dev/null || true
                     echo -e "${GREEN}  ✓ NS V2Ray mis à jour: ${MAG}$nv4${RESET} (services redémarrés)${RESET}"
                 fi; pause;;
