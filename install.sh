@@ -1090,7 +1090,7 @@ full_install() {
         rm -f /usr/local/bin/$_bf 2>/dev/null || true
     done
     rm -f /usr/local/sbin/dropbear 2>/dev/null || true
-    for _sf in xray v2ray haproxy hysteria zivpn badvpn@ dropbear-custom sshws ssl_tls proxy--ws ws-dropbear ws-stunnel socks_python_ws socks_python udp-custom slowdns-ns4 slowdns-nv4 dnsdist bot2 kighmu-bandwidth kighmu-panel pm2-kighmu kighmu-cleanup xray-watchdog; do
+    for _sf in xray v2ray haproxy hysteria zivpn badvpn@ dropbear-custom sshws ssl_tls proxy--ws ws-dropbear ws-stunnel socks_python_ws socks_python udp-custom slowdns-ns4 slowdns-nv4 slowdns-router bot2 kighmu-bandwidth kighmu-panel pm2-kighmu kighmu-cleanup xray-watchdog; do
         rm -f /etc/systemd/system/${_sf}.service 2>/dev/null || true
     done
     rm -f /etc/systemd/system/xray-watchdog.timer 2>/dev/null || true
@@ -2092,7 +2092,11 @@ exec /usr/local/bin/dnstt-server -udp 0.0.0.0:5354 -privkey-file /etc/slowdns/se
 NV4EOF
                     chmod +x /usr/local/bin/slowdns-nv4-start.sh
                     systemctl restart slowdns-nv4 2>/dev/null || true
-                    echo -e "${GREEN}  ✓ NV4 mis à jour: ${MAG}$n${RESET} (service redémarré)${RESET}"
+                    # Mettre à jour slowdns-router
+                    local NS4_cur=\$(cat /etc/slowdns/ns.conf 2>/dev/null)
+                    sed -i "s|Environment=ROUTES=.*|Environment=ROUTES=\${NS4_cur}=127.0.0.1:5353,\${n}=127.0.0.1:5354|" /etc/systemd/system/slowdns-router.service
+                    systemctl daemon-reload && systemctl restart slowdns-router 2>/dev/null || true
+                    echo -e "${GREEN}  ✓ NV4 mis à jour: ${MAG}$n${RESET} (services redémarrés)${RESET}"
                 fi; pause;;
             9) show_v2ray_traffic ;;
             0|q) break ;;
@@ -2375,7 +2379,6 @@ menu_set_domain() {
                 read -rp "  Nouveau NS4: " ns4
                 if [[ -n "$ns4" && "$ns4" != "0" ]]; then
                     echo "$ns4" > /etc/slowdns/ns.conf
-                    # Régénère le script de démarrage slowdns-ns4
                     cat > /usr/local/bin/slowdns-ns4-start.sh << NS4EOF
 #!/bin/bash
 NS=\$(cat /etc/slowdns/ns.conf)
@@ -2383,7 +2386,11 @@ exec /usr/local/bin/dnstt-server -udp 0.0.0.0:5353 -privkey-file /etc/slowdns/se
 NS4EOF
                     chmod +x /usr/local/bin/slowdns-ns4-start.sh
                     systemctl restart slowdns-ns4 2>/dev/null || true
-                    echo -e "${GREEN}  ✓ NS SlowDNS mis à jour: ${MAG}$ns4${RESET} (service redémarré)${RESET}"
+                    # Mettre à jour slowdns-router
+                    local NV4_cur=\$(cat /etc/slowdns/nv4/ns.conf 2>/dev/null)
+                    sed -i "s|Environment=ROUTES=.*|Environment=ROUTES=\${ns4}=127.0.0.1:5353,\${NV4_cur}=127.0.0.1:5354|" /etc/systemd/system/slowdns-router.service
+                    systemctl daemon-reload && systemctl restart slowdns-router 2>/dev/null || true
+                    echo -e "${GREEN}  ✓ NS SlowDNS mis à jour: ${MAG}$ns4${RESET} (services redémarrés)${RESET}"
                 fi; pause;;
             3) clear; echo -e "${CYAN}━━ NS V2Ray DNS (NV4) ━━${RESET}"
                 echo -e "  ${LAV}Actuel:${RESET} ${MAG}$NV4${RESET}"
@@ -2391,7 +2398,6 @@ NS4EOF
                 if [[ -n "$nv4" && "$nv4" != "0" ]]; then
                     mkdir -p /etc/slowdns/nv4
                     echo "$nv4" > /etc/slowdns/nv4/ns.conf
-                    # Régénère le script de démarrage slowdns-nv4
                     cat > /usr/local/bin/slowdns-nv4-start.sh << NV4EOF
 #!/bin/bash
 NV4=\$(cat /etc/slowdns/nv4/ns.conf)
@@ -2399,7 +2405,11 @@ exec /usr/local/bin/dnstt-server -udp 0.0.0.0:5354 -privkey-file /etc/slowdns/se
 NV4EOF
                     chmod +x /usr/local/bin/slowdns-nv4-start.sh
                     systemctl restart slowdns-nv4 2>/dev/null || true
-                    echo -e "${GREEN}  ✓ NS V2Ray mis à jour: ${MAG}$nv4${RESET} (service redémarré)${RESET}"
+                    # Mettre à jour slowdns-router
+                    local NS4_cur=\$(cat /etc/slowdns/ns.conf 2>/dev/null)
+                    sed -i "s|Environment=ROUTES=.*|Environment=ROUTES=\${NS4_cur}=127.0.0.1:5353,\${nv4}=127.0.0.1:5354|" /etc/systemd/system/slowdns-router.service
+                    systemctl daemon-reload && systemctl restart slowdns-router 2>/dev/null || true
+                    echo -e "${GREEN}  ✓ NS V2Ray mis à jour: ${MAG}$nv4${RESET} (services redémarrés)${RESET}"
                 fi; pause;;
             0|q) break ;;
         esac
@@ -2598,7 +2608,7 @@ menu_desinstalle() {
             if [[ "$CONFIRM" == "PURGE" ]]; then
                 # ── 1. Arrêt de tous les services ──
                 echo -e "${BG}  ${ORANGE}[1/12]${RESET} ${LAV}Arrêt de tous les services...${RESET}"
-                for s in $(systemctl list-units --type=service --all --no-legend 2>/dev/null | awk '{print $1}' | sed 's/\.service//' | grep -iE 'xray|v2ray|nginx|haproxy|hysteria|zivpn|dropbear|sshws|ws-|stunnel|socks|udp-custom|slowdns|dnsdist|bot2|mysql|kighmu|panel|badvpn|nftables-tunnel|proxy|pm2|kighmu-cleanup'); do
+                for s in $(systemctl list-units --type=service --all --no-legend 2>/dev/null | awk '{print $1}' | sed 's/\.service//' | grep -iE 'xray|v2ray|nginx|haproxy|hysteria|zivpn|dropbear|sshws|ws-|stunnel|socks|udp-custom|slowdns|slowdns-router|bot2|mysql|kighmu|panel|badvpn|nftables-tunnel|proxy|pm2|kighmu-cleanup'); do
                     systemctl disable --now "$s" 2>/dev/null || true
                 done
                 # Force kill any remaining custom processes
@@ -2646,11 +2656,11 @@ menu_desinstalle() {
                 echo -e "${BG}  ${ORANGE}[3/12]${RESET} ${LAV}Suppression des services systemd...${RESET}"
                 systemctl disable --now xray-watchdog.timer xray-watchdog.service 2>/dev/null || true
                 rm -f \
-                    /etc/systemd/system/{xray,v2ray,nginx,haproxy,hysteria,zivpn,dropbear-custom,sshws,ssl_tls,proxy--ws,ws-dropbear,ws-stunnel,socks_python_ws,socks_python,udp-custom,badvpn@,slowdns-ns4,slowdns-nv4,dnsdist,bot2,kighmu-bandwidth,kighmu-panel,pm2-kighmu,kighmu-cleanup}.service \
+                    /etc/systemd/system/{xray,v2ray,nginx,haproxy,hysteria,zivpn,dropbear-custom,sshws,ssl_tls,proxy--ws,ws-dropbear,ws-stunnel,socks_python_ws,socks_python,udp-custom,badvpn@,slowdns-ns4,slowdns-nv4,slowdns-router,bot2,kighmu-bandwidth,kighmu-panel,pm2-kighmu,kighmu-cleanup}.service \
                     /etc/systemd/system/xray-watchdog.{service,timer} \
                     /etc/systemd/system/nftables-tunnel@*.service \
                     /etc/systemd/system/mysql.service 2>/dev/null || true
-                rm -rf /etc/systemd/system/{dnsdist,nginx,haproxy,mysql}.service.d 2>/dev/null || true
+                rm -rf /etc/systemd/system/{nginx,haproxy,mysql}.service.d 2>/dev/null || true
                 find /etc/systemd/system/ -maxdepth 1 \( -name '*kighmu*' -o -name '*slowdns*' -o -name '*ws-*' -o -name '*socks*' -o -name '*badvpn*' -o -name '*udp-custom*' -o -name '*sshws*' -o -name '*cleanup*' -o -name '*watchdog*' \) 2>/dev/null | xargs rm -f 2>/dev/null || true
                 # Supprimer les symlinks dans multi-user.target.wants
                 find /etc/systemd/system/multi-user.target.wants/ -maxdepth 1 \( -name '*kighmu*' -o -name '*xray*' -o -name '*v2ray*' -o -name '*slowdns*' -o -name '*badvpn*' -o -name '*sshws*' -o -name '*hysteria*' -o -name '*zivpn*' -o -name '*dropbear*' -o -name '*udp-custom*' -o -name '*nginx*' -o -name '*haproxy*' -o -name '*mysql*' -o -name '*cleanup*' -o -name '*watchdog*' \) 2>/dev/null | xargs rm -f 2>/dev/null || true
@@ -2681,7 +2691,7 @@ menu_desinstalle() {
                 # (sinon apt n'en recrée pas les fichiers de base au prochain install)
                 rm -rf \
                     /etc/kighmu /etc/kighmu-v2 /etc/xray /etc/v2ray \
-                    /etc/hysteria /etc/zivpn /etc/slowdns /etc/dnsdist \
+                    /etc/hysteria /etc/zivpn /etc/slowdns \
                     /etc/udp-custom \
                     /opt/kighmu-panel /root/Kighmu /root/.pm2 \
                     /root/.npm /root/.config /root/.cache \
@@ -2753,7 +2763,7 @@ menu_desinstalle() {
                     xray-server v2ray haproxy hysteria zivpn \
                     nginx nginx-common nginx-core \
                     mysql-server mysql-client mysql-common \
-                    nodejs npm stunnel4 dropbear dnsdist \
+                    nodejs npm stunnel4 dropbear \
                     certbot python3-certbot-nginx \
                     build-essential cmake \
                     golang-go 2>/dev/null || true) &

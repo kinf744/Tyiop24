@@ -858,34 +858,12 @@ uninstall_ws_services() {
 # SLOWDNS
 # ================================================
 install_slowdns() {
-    echo "${CYAN}━━━ Installation SlowDNS (53→5300→5353/5354) ━━━${RESET}"
-
-    # ── dnsdist toujours configuré ──
-    apt-get install -y -qq dnsdist 2>/dev/null || true
-    local NS4_cfg="" NV4_cfg=""
-    NS4_cfg=$(head -1 /etc/slowdns/ns.conf 2>/dev/null || echo "")
-    NV4_cfg=$(head -1 /etc/slowdns/nv4/ns.conf 2>/dev/null || echo "")
-    [[ -z "$NS4_cfg" ]] && NS4_cfg="${AUTO_NS4:-ns4.kingom.ggff.net}"
-    [[ -z "$NV4_cfg" ]] && NV4_cfg="${AUTO_NV4:-nv4.kingom.ggff.net}"
-    mkdir -p /etc/dnsdist
-    cat > /etc/dnsdist/dnsdist.conf << DNSDEOF
-setSecurityPollSuffix("")
-setACL({"0.0.0.0/0","::/0"})
-addLocal("0.0.0.0:5300")
-newServer({address="127.0.0.1:5353",pool="ns4"})
-newServer({address="127.0.0.1:5354",pool="nv4"})
-addAction(makeRule("${NS4_cfg}."), PoolAction("ns4"))
-addAction(makeRule("${NV4_cfg}."), PoolAction("nv4"))
-addAction(AllRule(), RCodeAction(5))
-DNSDEOF
-    mkdir -p /etc/systemd/system/dnsdist.service.d
-    printf '[Service]\nRestart=always\nStartLimitIntervalSec=0\nStartLimitBurst=0\n' > /etc/systemd/system/dnsdist.service.d/restart.conf
-    systemctl daemon-reload; systemctl enable --now dnsdist 2>/dev/null || true
+    echo "${CYAN}━━━ Installation SlowDNS (53→5353/5354 via slowdns-router) ━━━${RESET}"
 
     command -v dnstt-server &>/dev/null && { warn "SlowDNS déjà installé"; pause; return; }
-    apt-get install -y -qq curl jq wget 2>/dev/null
+    apt-get install -y -qq curl jq wget golang-go 2>/dev/null
 
-    local DIR="/etc/slowdns"; mkdir -p "$DIR/ns4" "$DIR/nv4" /var/log/slowdns
+    local DIR="/etc/slowdns"; mkdir -p "$DIR/ns4" "$DIR/nv4" /var/log/slowdns /root/Kighmu/slowdns-router
     local PUB_KEY; PUB_KEY=$(curl -s ipv4.icanhazip.com 2>/dev/null || hostname -I | awk '{print $1}')
 
     local DNSTT_PRIV="4ab3af05fc004cb69d50c89de2cd5d138be1c397a55788b8867088e801f7fcaa"
@@ -949,13 +927,193 @@ UNIT
         systemctl daemon-reload && systemctl enable --now "${svc}.service" 2>/dev/null || true
     done
 
-    deploy_nft_tunnel slowdns 'table inet slowdns { chain prerouting { type nat hook prerouting priority -100; udp dport 53 redirect to :5300; tcp dport 53 redirect to :5300; }; chain input { type filter hook input priority 0; policy accept; udp dport 53 accept; udp dport 5300 accept; udp dport 5353 accept; udp dport 5354 accept; tcp dport 109 accept; tcp dport 5401 accept; }; }'
+    cat > /root/Kighmu/slowdns-router/main.go << 'GOEOF'
+package main
+
+import (
+	"fmt"
+	"log"
+	"net"
+	"os"
+	"os/signal"
+	"strings"
+	"sync"
+	"syscall"
+	"time"
+)
+
+type route struct {
+	domain string
+	addr   *net.UDPAddr
+}
+
+type stats struct {
+	mu      sync.Mutex
+	total   int64
+	routed  map[string]int64
+	refused int64
+	errors  int64
+}
+
+func getEnv(key, fallback string) string {
+	if v := os.Getenv(key); v != "" { return v }
+	return fallback
+}
+
+func getEnvInt(key string, fallback int) int {
+	if v := os.Getenv(key); v != "" {
+		if n, err := fmt.Sscanf(v, "%d", &fallback); n == 1 && err == nil { return fallback }
+	}
+	return fallback
+}
+
+func main() {
+	listen := getEnv("LISTEN", "0.0.0.0:53")
+	timeout := time.Duration(getEnvInt("TIMEOUT", 5)) * time.Second
+	verbose := os.Getenv("VERBOSE") == "1"
+	routesDef := getEnv("ROUTES", "")
+	if routesDef == "" { log.Fatal("ROUTES required") }
+
+	var routes []route
+	for _, part := range strings.Split(routesDef, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" { continue }
+		eq := strings.IndexByte(part, '=')
+		if eq < 1 { log.Fatalf("invalid route %%q", part) }
+		domain := strings.ToLower(strings.TrimSuffix(part[:eq], "."))
+		addr, err := net.ResolveUDPAddr("udp4", part[eq+1:])
+		if err != nil { log.Fatalf("resolve: %%v", err) }
+		routes = append(routes, route{domain: domain, addr: addr})
+	}
+
+	var st stats; st.routed = make(map[string]int64)
+	laddr, _ := net.ResolveUDPAddr("udp4", listen)
+	conn, err := net.ListenUDP("udp4", laddr)
+	if err != nil { log.Fatalf("listen: %%v", err) }
+	defer conn.Close()
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM, syscall.SIGUSR1)
+	go func() {
+		for sig := range sigCh {
+			if sig == syscall.SIGUSR1 { printStats(&st) } else { conn.Close(); return }
+		}
+	}()
+
+	log.Printf("slowdns-router on %s", listen)
+	for _, r := range routes { log.Printf("  %s -> %s", r.domain, r.addr) }
+
+	buf := make([]byte, 4096)
+	for {
+		n, clientAddr, err := conn.ReadFromUDP(buf)
+		if err != nil { break }
+		st.mu.Lock(); st.total++; st.mu.Unlock()
+		packet := make([]byte, n); copy(packet, buf[:n])
+		go handle(conn, clientAddr, packet, routes, timeout, verbose, &st)
+	}
+	printStats(&st)
+}
+
+func handle(conn *net.UDPConn, clientAddr *net.UDPAddr, packet []byte, routes []route, timeout time.Duration, verbose bool, st *stats) {
+	qname, err := extractQName(packet)
+	if err != nil { return }
+	qname = strings.ToLower(qname)
+	if !strings.HasSuffix(qname, ".") { qname += "." }
+
+	for _, r := range routes {
+		if strings.HasSuffix(qname, r.domain+".") {
+			resp, err := forward(packet, r.addr, timeout)
+			if err != nil {
+				st.mu.Lock(); st.errors++; st.mu.Unlock()
+				sendRefused(conn, clientAddr, packet)
+				return
+			}
+			st.mu.Lock(); st.routed[r.domain]++; st.mu.Unlock()
+			conn.WriteToUDP(resp, clientAddr)
+			return
+		}
+	}
+	st.mu.Lock(); st.refused++; st.mu.Unlock()
+	sendRefused(conn, clientAddr, packet)
+}
+
+func extractQName(packet []byte) (string, error) {
+	if len(packet) < 12 { return "", fmt.Errorf("too short") }
+	var labels []string; pos := 12
+	for {
+		if pos >= len(packet) { return "", fmt.Errorf("truncated") }
+		length := int(packet[pos])
+		if length == 0 { pos++; break }
+		if length&0xC0 != 0 { return "", fmt.Errorf("compressed") }
+		pos++
+		if pos+length > len(packet) { return "", fmt.Errorf("overflow") }
+		labels = append(labels, string(packet[pos:pos+length]))
+		pos += length
+	}
+	return strings.Join(labels, "."), nil
+}
+
+func forward(packet []byte, backend *net.UDPAddr, timeout time.Duration) ([]byte, error) {
+	bc, err := net.DialUDP("udp4", nil, backend)
+	if err != nil { return nil, err }
+	defer bc.Close()
+	bc.SetDeadline(time.Now().Add(timeout))
+	if _, err := bc.Write(packet); err != nil { return nil, err }
+	resp := make([]byte, 4096)
+	n, err := bc.Read(resp)
+	if err != nil { return nil, err }
+	out := make([]byte, n); copy(out, resp[:n])
+	return out, nil
+}
+
+func sendRefused(conn *net.UDPConn, clientAddr *net.UDPAddr, req []byte) {
+	if len(req) < 12 { return }
+	resp := make([]byte, len(req)); copy(resp, req)
+	resp[2] = (req[2] & 0x01) | 0x80
+	resp[3] = 0x85; resp[6] = 0; resp[7] = 0
+	resp[8] = 0; resp[9] = 0; resp[10] = 0; resp[11] = 0
+	conn.WriteToUDP(resp, clientAddr)
+}
+
+func printStats(st *stats) {
+	st.mu.Lock(); defer st.mu.Unlock()
+	fmt.Fprintf(os.Stderr, "\n--- stats ---\ntotal: %d\n", st.total)
+	for d, c := range st.routed { fmt.Fprintf(os.Stderr, "  %s: %d\n", d, c) }
+	fmt.Fprintf(os.Stderr, "refused: %d\nerrors: %d\n------------\n", st.refused, st.errors)
+}
+GOEOF
+
+    cd /root/Kighmu/slowdns-router && go build -o slowdns-router . 2>/dev/null
+    cp slowdns-router /usr/local/bin/slowdns-router 2>/dev/null || true
+
+    cat > /etc/systemd/system/slowdns-router.service << UNIT
+[Unit]
+Description=SlowDNS Go Router
+After=network-online.target slowdns-ns4.service slowdns-nv4.service
+Wants=network-online.target
+StartLimitIntervalSec=0
+[Service]
+Type=simple
+Environment=LISTEN=0.0.0.0:53
+Environment=ROUTES=$NS4=127.0.0.1:5353,$NV4=127.0.0.1:5354
+Environment=TIMEOUT=5
+ExecStart=/usr/local/bin/slowdns-router
+Restart=always
+RestartSec=3
+LimitNOFILE=1048576
+KillMode=mixed
+[Install]
+WantedBy=multi-user.target
+UNIT
+    systemctl daemon-reload && systemctl enable --now slowdns-router.service 2>/dev/null || true
+
+    deploy_nft_tunnel slowdns 'table inet slowdns { chain prerouting { type nat hook prerouting priority -100; }; chain input { type filter hook input priority 0; policy accept; udp dport 53 accept; udp dport 5353 accept; udp dport 5354 accept; tcp dport 109 accept; tcp dport 5401 accept; }; }'
 
     chattr -i /etc/resolv.conf 2>/dev/null || true
     printf 'nameserver 1.1.1.1\nnameserver 8.8.8.8\n' > /etc/resolv.conf
     chattr +i /etc/resolv.conf 2>/dev/null || true
 
-    log "SlowDNS actif (53→5300→5353/5354)"
+    log "SlowDNS actif (53→5353/5354 via slowdns-router)"
     echo "   NS4: $NS4 → 127.0.0.1:109 (SSH)"
     echo "   NV4: $NV4 → 127.0.0.1:5401 (V2Ray)"
     pause
@@ -963,14 +1121,13 @@ UNIT
 
 uninstall_slowdns() {
     read -rp "Confirmer ? (o/N): " C; [[ "$C" =~ ^[oO]$ ]] || return
-    for svc in slowdns-ns4 slowdns-nv4 dnsdist; do
+    for svc in slowdns-ns4 slowdns-nv4 slowdns-router; do
         systemctl disable --now "$svc" 2>/dev/null || true
     done
-    rm -f /etc/systemd/system/slowdns-ns4.service /etc/systemd/system/slowdns-nv4.service
-    rm -f /usr/local/bin/dnstt-server
+    rm -f /etc/systemd/system/slowdns-ns4.service /etc/systemd/system/slowdns-nv4.service /etc/systemd/system/slowdns-router.service
+    rm -f /usr/local/bin/dnstt-server /usr/local/bin/slowdns-router
     rm -f /usr/local/bin/slowdns-ns4-start.sh /usr/local/bin/slowdns-nv4-start.sh
-    rm -rf /etc/slowdns /var/log/slowdns /etc/dnsdist
-    rm -f /etc/systemd/system/dnsdist.service.d/restart.conf
+    rm -rf /etc/slowdns /var/log/slowdns /root/Kighmu/slowdns-router
     systemctl daemon-reload
     remove_nft_tunnel slowdns
     chattr -i /etc/resolv.conf 2>/dev/null || true
