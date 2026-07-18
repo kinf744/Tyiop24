@@ -1540,33 +1540,33 @@ show_del_panel() {
   local -a unames=()
   local i=0 expired=0 active=0 today
   today=$(date +%Y-%m-%d)
-  clear
-  echo -e "${BG}┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄${RESET}"
-  echo -e "${BG}        >>> ${title} <<<${RESET}"
-  echo -e "${BG}┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄${RESET}"
-  echo ""
-  printf "  ${WHITE}%-3s %-16s %-14s %s${RESET}\n" "NO" "USERNAME" "EXPIRED" "STATUS"
-  echo -e "  ${DIM}──   ────────        ───────        ──────${RESET}"
+  clear >&2
+  echo -e "${BG}┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄${RESET}" >&2
+  echo -e "${BG}        >>> ${title} <<<${RESET}" >&2
+  echo -e "${BG}┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄${RESET}" >&2
+  echo "" >&2
+  printf "  ${WHITE}%-3s %-16s %-14s %s${RESET}\n" "NO" "USERNAME" "EXPIRED" "STATUS" >&2
+  echo -e "  ${DIM}──   ────────        ───────        ──────${RESET}" >&2
   for entry in "${users[@]}"; do
     local uname="${entry%%|*}"
     local exp="${entry#*|}"
     unames+=("$uname")
     i=$((i+1))
     if [[ "$exp" < "$today" ]]; then
-      printf "  ${CYAN}%02d${RESET}  ${WHITE}%-16s${RESET} ${MAG}%-14s${RESET} ${RED}%-6s${RESET}\n" "$i" "$uname" "$exp" "EXPIRED"
+      printf "  ${CYAN}%02d${RESET}  ${WHITE}%-16s${RESET} ${MAG}%-14s${RESET} ${RED}%-6s${RESET}\n" "$i" "$uname" "$exp" "EXPIRED" >&2
       expired=$((expired+1))
     else
-      printf "  ${CYAN}%02d${RESET}  ${WHITE}%-16s${RESET} ${MAG}%-14s${RESET} ${GREEN}%-6s${RESET}\n" "$i" "$uname" "$exp" "ACTIVE"
+      printf "  ${CYAN}%02d${RESET}  ${WHITE}%-16s${RESET} ${MAG}%-14s${RESET} ${GREEN}%-6s${RESET}\n" "$i" "$uname" "$exp" "ACTIVE" >&2
       active=$((active+1))
     fi
   done
-  echo -e "${BG}┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄${RESET}"
-  printf "\n  ${LAV}Total :${RESET} ${WHITE}%d${RESET} utilisateurs  (${RED}%d expire${RESET} · ${GREEN}%d actif${RESET})\n\n" "$i" "$expired" "$active"
-  echo -e "  ${YELLOW}Entrer le(s) numero(s) a supprimer${RESET}"
-  echo -e "  ${DIM}(ex: 1 ou 1,3,5 ou 1-4)${RESET}\n"
-  echo -e "  ${RED}[A]${RESET} Supprimer TOUT     ${GREEN}[0]${RESET} Annuler"
-  echo -e "${BG}┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄${RESET}"
-  echo -ne " ${CYAN}Select »»${RESET} "
+  echo -e "${BG}┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄${RESET}" >&2
+  printf "\n  ${LAV}Total :${RESET} ${WHITE}%d${RESET} utilisateurs  (${RED}%d expire${RESET} · ${GREEN}%d actif${RESET})\n\n" "$i" "$expired" "$active" >&2
+  echo -e "  ${YELLOW}Entrer le(s) numero(s) a supprimer${RESET}" >&2
+  echo -e "  ${DIM}(ex: 1 ou 1,3,5 ou 1-4)${RESET}\n" >&2
+  echo -e "  ${RED}[A]${RESET} Supprimer TOUT     ${GREEN}[0]${RESET} Annuler" >&2
+  echo -e "${BG}┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄${RESET}" >&2
+  echo -ne " ${CYAN}Select »»${RESET} " >&2
   IFS= read -r input
   [[ -z "$input" ]] && return
   input="${input,,}"
