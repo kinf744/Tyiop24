@@ -21,6 +21,37 @@ DOMAINES_REFERENCE = {
     "google.com": {"attendu": False, "note": "N'est PAS sur Free Basics"},
 }
 
+# Plateformes gratuites à tester (pour trouver un gap fonctionnel)
+PLATEFORMES_GRATUITES = [
+    # Sous-domaines Blogger/Blogspot (gratuits, reporter247 était Blogger)
+    "testfbcheck.blogspot.com",
+    "testfbcheck.blogspot.co.uk",
+    "testfbcheck.blogspot.fr",
+    "testfbcheck.blogspot.de",
+    # Blogspot.com (version brève)
+    "testfbcheck.blogspot.com",
+    # wordpress.com gratuit
+    "testfbcheck.wordpress.com",
+    # GitHub Pages (déjà confirmé pour certains)
+    "testfbcheck.github.io",
+    # weebly
+    "testfbcheck.weebly.com",
+    # wix (sous-domaine)
+    "testfbcheck.wixsite.com",
+    # Site123
+    "testfbcheck.site123.me",
+    # Strikingly
+    "testfbcheck.strikingly.com",
+    # Jimdo
+    "testfbcheck.jimdofree.com",
+    # Yola
+    "testfbcheck.yolasite.com",
+    # Tumblr
+    "testfbcheck.tumblr.com",
+    # Medium
+    "testfbcheck.medium.com",
+]
+
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -182,6 +213,7 @@ def main():
         print("    python3 freebasics_checker.py reporter247.org")
         print("    python3 freebasics_checker.py --all")
         print("    python3 freebasics_checker.py reporter247.org learnbasicmath.github.io")
+        print("    python3 freebasics_checker.py --free      # Test plateformes gratuites")
         print()
         sys.exit(1)
 
@@ -189,6 +221,8 @@ def main():
 
     if "--all" in domains or "-a" in domains:
         domains = list(DOMAINES_REFERENCE.keys()) + ["reporter247.org"]
+    if "--free" in domains or "-f" in domains:
+        domains = PLATEFORMES_GRATUITES + ["facebook.com", "google.com"]
 
     # Test chaque domaine
     results = []
