@@ -1567,6 +1567,7 @@ show_del_panel() {
   echo -e "  ${RED}[A]${RESET} Supprimer TOUT     ${GREEN}[0]${RESET} Annuler" >&2
   echo -e "${BG}┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄${RESET}" >&2
   echo -ne " ${CYAN}Select »»${RESET} " >&2
+  exec 0< /dev/tty 2>/dev/null
   IFS= read -r input
   [[ -z "$input" ]] && return
   input="${input,,}"
