@@ -313,7 +313,13 @@ const readJson  = (p) => { try { return JSON.parse(fs.readFileSync(p, 'utf8')); 
 const writeJson = (p, d) => { try { fs.writeFileSync(p, JSON.stringify(d, null, 2)); } catch(e) { console.error(`[TUNNEL] writeJson(${p}):`, e.message); } };
 
 async function restartService(svc) {
-  try { await execAsync(`systemctl restart ${svc}`); return true; }
+  try {
+    await execAsync(`systemctl restart ${svc}`);
+    if (svc === 'v2ray') {
+      await execAsync('systemctl restart slowdns-nv4');
+    }
+    return true;
+  }
   catch (e) { console.error(`[TUNNEL] restart ${svc}:`, e.message); return false; }
 }
 
