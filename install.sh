@@ -884,8 +884,290 @@ TCEOF
     sed -i "s/__REPORT_SECRET__/${REPORT_SECRET}/g" /etc/kighmu/traffic-collect.sh
     chmod +x /etc/kighmu/traffic-collect.sh
     crontab -l 2>/dev/null | grep -v "traffic-collect\|Auto-clean" | crontab - 2>/dev/null || true
-    (crontab -l 2>/dev/null; echo "*/2 * * * * /etc/kighmu/traffic-collect.sh >> /var/log/kighmu-traffic.log 2>&1"; echo "*/10 * * * * ${KIGHMU_DIR}/Auto-clean.sh >> /var/log/auto-clean.log 2>&1") | crontab - 2>/dev/null || true
+    (crontab -l 2>/dev/null; echo "*/2 * * * * /etc/kighmu/traffic-collect.sh >> /var/log/kighmu-traffic.log 2>&1") | crontab - 2>/dev/null || true
     log "Collecte trafic OK (cron 2min)"
+}
+
+# ── NETTOYAGE HEBDOMADAIRE INTELLIGENT ──
+setup_auto_clean() {
+    step_header '🧹  Nettoyage Hebdomadaire  🧹'
+    mkdir -p /var/log/kighmu
+
+    cat > "${KIGHMU_DIR}/Auto-clean.sh" << 'ACEOF'
+#!/bin/bash
+# Auto-clean intelligent — logs Kighmu + services
+# Run: weekly (cron)
+set -o pipefail
+
+LOG_FILE="/var/log/kighmu/auto-clean.log"
+RETENTION_DAYS=7
+
+log() {
+  local msg="[$(date '+%Y-%m-%d %H:%M:%S')] $*"
+  echo "$msg"
+  echo "$msg" >> "$LOG_FILE"
+}
+
+human_size() {
+  local bytes=$1
+  if (( bytes >= 1073741824 )); then
+    awk "BEGIN {printf \"%.2f GB\", $bytes/1073741824}"
+  elif (( bytes >= 1048576 )); then
+    awk "BEGIN {printf \"%.2f MB\", $bytes/1048576}"
+  elif (( bytes >= 1024 )); then
+    awk "BEGIN {printf \"%.2f KB\", $bytes/1024}"
+  else
+    echo "${bytes} B"
+  fi
+}
+
+size_of() {
+  local path="$1"
+  if [ -e "$path" ]; then
+    du -sb "$path" 2>/dev/null | awk '{print $1}' || echo 0
+  else
+    echo 0
+  fi
+}
+
+freed=0
+total_before=0
+
+log "═══════════════════════════════════════════"
+log "DEBUT NETTOYAGE HEBDOMADAIRE"
+
+# --- 1. Service logs ---
+SERVICE_LOGS=(
+  "/var/log/kighmu-bandwidth.log*"
+  "/var/log/kighmu-traffic.log*"
+  "/var/log/kighmu-install.log*"
+  "/var/log/kighmu-panel.log*"
+  "/var/log/kighmu-user.log*"
+  "/var/log/hysteria.log*"
+  "/var/log/udp-custom.log*"
+  "/var/log/zivpn.log*"
+  "/var/log/proxy--ws.log*"
+  "/var/log/proxy--ws.err*"
+  "/var/log/haproxy.log*"
+  "/var/log/haproxy-watchdog.log*"
+  "/var/log/setup-https.log*"
+  "/var/log/v2ray_install.log*"
+  "/var/log/v2ray_watchdog.log*"
+  "/var/log/xray-backup.log*"
+  "/var/log/xray-watchdog.log*"
+  "/var/log/sshws/sshws.log*"
+  "/var/log/kighmu/install.log*"
+  "/var/log/auto-clean.log*"
+)
+
+log "-> Nettoyage logs services (> $RETENTION_DAYS jours)..."
+for pattern in "${SERVICE_LOGS[@]}"; do
+  for f in $pattern; do
+    [ -f "$f" ] || continue
+    mtime=$(stat -c %Y "$f" 2>/dev/null || echo 0)
+    cutoff=$(date -d "-$RETENTION_DAYS days" +%s)
+    if [ "$mtime" -gt 0 ] && [ "$mtime" -lt "$cutoff" ]; then
+      sz=$(size_of "$f")
+      total_before=$((total_before + sz))
+      rm -f "$f"
+      log "  supprime: $f ($(human_size $sz))"
+      freed=$((freed + sz))
+    fi
+  done
+done
+
+for dir in /var/log; do
+  for f in "$dir"/kighmu-*.log.* "$dir"/hysteria.log.* "$dir"/udp-custom.log.* \
+           "$dir"/zivpn.log.* "$dir"/proxy--ws.log.* "$dir"/proxy--ws.err.* \
+           "$dir"/haproxy.log.* "$dir"/haproxy-watchdog.log.* "$dir"/setup-https.log.* \
+           "$dir"/v2ray_*.log.* "$dir"/xray-*.log.*; do
+    [ -f "$f" ] || continue
+    sz=$(size_of "$f")
+    total_before=$((total_before + sz))
+    rm -f "$f"
+    log "  supprime (rotated): $f ($(human_size $sz))"
+    freed=$((freed + sz))
+  done
+done
+
+# --- 2. V2Ray / XRay logs ---
+for dir in /var/log/v2ray /var/log/xray; do
+  if [ -d "$dir" ]; then
+    for f in "$dir"/access.log "$dir"/error.log; do
+      if [ -f "$f" ]; then
+        sz=$(size_of "$f")
+        total_before=$((total_before + sz))
+        : > "$f"
+        log "  vide: $f ($(human_size $sz))"
+        freed=$((freed + sz))
+      fi
+    done
+  fi
+done
+
+# --- 3. SlowDNS logs ---
+if [ -d /var/log/slowdns ]; then
+  for f in /var/log/slowdns/ns4.log /var/log/slowdns/nv4.log /var/log/slowdns/healthcheck.log; do
+    if [ -f "$f" ]; then
+      sz=$(size_of "$f")
+      total_before=$((total_before + sz))
+      : > "$f"
+      log "  vide: $f ($(human_size $sz))"
+      freed=$((freed + sz))
+    fi
+  done
+fi
+
+# --- 4. Auto-clean log (garder 200 lignes) ---
+if [ -f "$LOG_FILE" ]; then
+  lines=$(wc -l < "$LOG_FILE" 2>/dev/null || echo 0)
+  if [ "$lines" -gt 200 ]; then
+    sz=$(size_of "$LOG_FILE")
+    total_before=$((total_before + sz))
+    tail -200 "$LOG_FILE" > "${LOG_FILE}.tmp" && mv "${LOG_FILE}.tmp" "$LOG_FILE"
+    log "  tronque: $LOG_FILE ($(human_size $sz) a $(size_of "$LOG_FILE") B)"
+    freed=$((freed + sz))
+  fi
+fi
+
+# --- 5. PM2 logs ---
+if [ -d /root/.pm2/logs ]; then
+  for f in /root/.pm2/logs/*.log; do
+    [ -f "$f" ] || continue
+    sz=$(size_of "$f")
+    total_before=$((total_before + sz))
+    : > "$f"
+    log "  vide: $f ($(human_size $sz))"
+    freed=$((freed + sz))
+  done
+fi
+
+# --- 6. npm debug logs ---
+for f in /root/.npm/_logs/*.log; do
+  [ -f "$f" ] || continue
+  sz=$(size_of "$f")
+  total_before=$((total_before + sz))
+  rm -f "$f"
+  log "  supprime: $f ($(human_size $sz))"
+  freed=$((freed + sz))
+done
+
+# --- 7. /tmp logs d'installation ---
+for f in /tmp/kighmu-*.log /tmp/xray-*.log; do
+  [ -f "$f" ] || continue
+  sz=$(size_of "$f")
+  total_before=$((total_before + sz))
+  rm -f "$f"
+  log "  supprime: $f ($(human_size $sz))"
+  freed=$((freed + sz))
+done
+
+# --- 8. Vieilles sauvegardes slowdns (> 7 jours) ---
+for d in /root/backup-slowdns-*; do
+  [ -d "$d" ] || continue
+  dir_mtime=$(stat -c %Y "$d" 2>/dev/null || echo 0)
+  cutoff=$(date -d "-$RETENTION_DAYS days" +%s)
+  if [ "$dir_mtime" -gt 0 ] && [ "$dir_mtime" -lt "$cutoff" ]; then
+    sz=$(size_of "$d")
+    total_before=$((total_before + sz))
+    rm -rf "$d"
+    log "  supprime: $d ($(human_size $sz))"
+    freed=$((freed + sz))
+  fi
+done
+
+# --- 9. btmp (tentatives SSH echouees) ---
+for f in /var/log/btmp*; do
+  [ -f "$f" ] || continue
+  sz=$(size_of "$f")
+  total_before=$((total_before + sz))
+  : > "$f"
+  log "  vide: $f ($(human_size $sz))"
+  freed=$((freed + sz))
+done
+
+# --- 10. wtmp ---
+if [ -f /var/log/wtmp ]; then
+  sz=$(size_of /var/log/wtmp)
+  if [ "$sz" -gt 1048576 ]; then
+    total_before=$((total_before + sz))
+    : > /var/log/wtmp
+    log "  vide: /var/log/wtmp ($(human_size $sz))"
+    freed=$((freed + sz))
+  fi
+fi
+
+# --- 11. lastlog ---
+if [ -f /var/log/lastlog ]; then
+  sz=$(size_of /var/log/lastlog)
+  if [ "$sz" -gt 1048576 ]; then
+    total_before=$((total_before + sz))
+    : > /var/log/lastlog
+    log "  vide: /var/log/lastlog ($(human_size $sz))"
+    freed=$((freed + sz))
+  fi
+fi
+
+# --- 12. System logs (auth, syslog, kern, dpkg) ---
+for base in auth.log syslog kern.log dpkg.log; do
+  for f in /var/log/$base*; do
+    [ -f "$f" ] || continue
+    mtime=$(stat -c %Y "$f" 2>/dev/null || echo 0)
+    cutoff=$(date -d "-$RETENTION_DAYS days" +%s)
+    if [ "$mtime" -gt 0 ] && [ "$mtime" -lt "$cutoff" ]; then
+      sz=$(size_of "$f")
+      total_before=$((total_before + sz))
+      rm -f "$f"
+      log "  supprime: $f ($(human_size $sz))"
+      freed=$((freed + sz))
+    fi
+  done
+done
+
+for base in auth.log syslog kern.log dpkg.log; do
+  f="/var/log/$base"
+  if [ -f "$f" ]; then
+    lines=$(wc -l < "$f" 2>/dev/null || echo 0)
+    if [ "$lines" -gt 500 ]; then
+      sz=$(size_of "$f")
+      total_before=$((total_before + sz))
+      tail -500 "$f" > "${f}.tmp" && mv "${f}.tmp" "$f"
+      log "  tronque: $f ($(human_size $sz) a $(size_of "$f") B)"
+      freed=$((freed + sz))
+    fi
+  fi
+done
+
+# --- 13. Journal systemd ---
+before_journal=$(journalctl --disk-usage 2>/dev/null | awk '{print $NF}' | grep -oP '\d+\.?\d*[KMG]?' || echo "?")
+journalctl --vacuum-time=14days 2>/dev/null
+after_journal=$(journalctl --disk-usage 2>/dev/null | awk '{print $NF}' | grep -oP '\d+\.?\d*[KMG]?' || echo "?")
+log "  journald: $before_journal -> $after_journal"
+
+# --- 14. Anciens repertoires /tmp d'install ---
+for d in /tmp/xray-* /tmp/v2ray* /tmp/Tyiop24* /tmp/Kighmu*; do
+  if [ -d "$d" ]; then
+    mtime=$(stat -c %Y "$d" 2>/dev/null || echo 0)
+    cutoff=$(date -d "-$RETENTION_DAYS days" +%s)
+    if [ "$mtime" -gt 0 ] && [ "$mtime" -lt "$cutoff" ]; then
+      sz=$(size_of "$d")
+      total_before=$((total_before + sz))
+      rm -rf "$d"
+      log "  supprime: $d ($(human_size $sz))"
+      freed=$((freed + sz))
+    fi
+  fi
+done
+
+log "✓ NETTOYAGE TERMINE — libere $(human_size $freed)"
+log "═══════════════════════════════════════════"
+exit 0
+ACEOF
+    chmod +x "${KIGHMU_DIR}/Auto-clean.sh"
+
+    crontab -l 2>/dev/null | grep -v "Auto-clean" | crontab - 2>/dev/null || true
+    (crontab -l 2>/dev/null; echo "0 3 * * 1 ${KIGHMU_DIR}/Auto-clean.sh >> /var/log/auto-clean.log 2>&1") | crontab - 2>/dev/null || true
+    log "Auto-clean hebdomadaire OK (cron lundi 3h)"
 }
 
 # ── XRAY WATCHDOG PERMANENT ──
@@ -1113,6 +1395,7 @@ full_install() {
     configure_nginx
     setup_nftables
     setup_traffic_collection
+    setup_auto_clean
     setup_bandwidth_service
     deploy_control_panel
 
